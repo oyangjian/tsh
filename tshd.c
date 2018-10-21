@@ -74,7 +74,7 @@ int main( int argc, char **argv )
     struct sockaddr_in client_addr;
     struct hostent *client_host;
 
-    while ((opt = getopt(argc, argv, "s:p:c::")) != -1) {
+    while ((opt = getopt(argc, argv, "s:p:c:")) != -1) {
         switch (opt) {
             case 'p':
                 server_port=atoi(optarg); /* We hope ... */
