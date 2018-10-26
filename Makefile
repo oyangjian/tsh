@@ -1,6 +1,8 @@
-CC		= gcc
+
+CROSS_COMPILE ?= ../tool/gcc-linaro-arm-linux-gnueabihf-4.7-2012.11-20121123_linux/bin/arm-linux-gnueabihf-
+CC		= $(CROSS_COMPILE)gcc
 RM		= rm -f
-STRIP		= strip
+STRIP		= $(CROSS_COMPILE)strip
 CFLAGS		= -O3 -W -Wall
 
 TOOLCHAIN	= /var/toolchain/sys30
@@ -64,6 +66,11 @@ linux:
 	gcc -O -W -Wall -o tsh  $(CLIENT_OBJ)
 	gcc -O -W -Wall -o tshd $(SERVER_OBJ) -lutil -DLINUX
 	strip tsh tshd
+
+linuxarm:
+	$(CC) -O -W -Wall -o tsh  $(CLIENT_OBJ) -DARM -DLINUX
+	$(CC) -O -W -Wall -o tshd $(SERVER_OBJ) -lutil -DARM -DLINUX
+	$(STRIP) tsh tshd
 
 linux_x64:
 	$(MAKE)								\
