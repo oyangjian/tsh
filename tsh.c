@@ -261,7 +261,7 @@ connect:
 
             ret = ( ( argc == 3 )
                 ? tsh_runshell( server, argv[2] )
-                : tsh_runshell( server, "exec bash --login" ) );
+                : tsh_runshell( server, "exec /bin/sh" ) );
             break;
 
         default:
