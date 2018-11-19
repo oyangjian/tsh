@@ -2,7 +2,8 @@
 CROSS_COMPILE ?= ../tool/gcc-linaro-arm-linux-gnueabihf-4.7-2012.11-20121123_linux/bin/arm-linux-gnueabihf-
 CC		= $(CROSS_COMPILE)gcc
 RM		= rm -f
-STRIP		= $(CROSS_COMPILE)strip
+STRIP		= strip
+ARMSTRIP	= $(CROSS_COMPILE)strip
 CFLAGS		= -O3 -W -Wall
 
 TOOLCHAIN	= /var/toolchain/sys30
@@ -10,6 +11,7 @@ TOOLCHAIN	= /var/toolchain/sys30
 COMM		= pel.o aes.o sha1.o
 TSH		= tsh
 TSHD		= tshd
+UdpProxy = tshUdpProxy
 
 VERSION=tsh-0.7
 CLIENT_OBJ=pel.c aes.c sha1.c  tsh.c
@@ -51,7 +53,7 @@ darwin:
 		CC="clang"						\
 		LDFLAGS="$(LDFLAGS) -lutil"				\
 		DEFS="$(DEFS) -DOPENBSD"				\
-		$(TSH) $(TSHD)
+		$(TSH) $(TSHD) tshUdpProxy
 
 iphone:
 	$(MAKE)								\
@@ -70,7 +72,7 @@ linux:
 linuxarm:
 	$(CC) -O -W -Wall -o tsh  $(CLIENT_OBJ) -DARM -DLINUX
 	$(CC) -O -W -Wall -o tshd $(SERVER_OBJ) -lutil -DARM -DLINUX
-	$(STRIP) tsh tshd
+	$(ARMSTRIP) tsh tshd
 
 linux_x64:
 	$(MAKE)								\
@@ -132,6 +134,11 @@ $(TSHD): $(COMM) tshd.o
 	$(CC) ${LDFLAGS} -o $(TSHD) $(COMM) tshd.o
 	$(STRIP) $(TSHD)
 
+
+$(UdpProxy): tshUdpProxy.o
+	g++ ${LDFLAGS} -std=c++11 -o $(UdpProxy) tshUdpProxy.o
+
+
 aes.o: aes.h
 pel.o: aes.h pel.h sha1.h
 sha1.o: sha1.h
@@ -141,8 +148,11 @@ tshd.o: pel.h tsh.h
 .c.o:
 	$(CC) ${CFLAGS} ${DEFS} -c $*.c
 
+.cpp.o:
+	g++ ${CFLAGS} ${DEFS} -std=c++11 -c $*.cpp
+
 clean:
-	$(RM) $(TSH) $(TSHD) *.o core
+	$(RM) $(TSH) $(TSHD) tshUdpProxy *.o core
 
 
 dist:

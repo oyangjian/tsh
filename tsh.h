@@ -6,6 +6,7 @@ char *cb_host = NULL;
 
 #define SERVER_PORT 1234
 short int server_port = SERVER_PORT;
+const char *server_hostname;
 
 #define CONNECT_BACK_HOST  "localhost"
 #define CONNECT_BACK_DELAY 5

