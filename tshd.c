@@ -151,7 +151,7 @@ int main( int argc, char **argv )
         }
     }
 
-
+    signal(SIGHUP, SIG_IGN);
     /* fork into background */
 	if (background) {
 		pid = fork();
@@ -174,12 +174,14 @@ int main( int argc, char **argv )
 			return( 2 );
 		}
 
+		// BUGFIX don't close the fs, because remote tsh will require password once close fd.
 		/* close all file descriptors */
-
+		/*
 		for( n = 0; n < 1024; n++ )
 		{
 			close( n );
 		}
+		*/
 	}
 
 	if (cb_host == NULL) {
