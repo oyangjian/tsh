@@ -1,10 +1,14 @@
 
+CONNECT_BACK_HOST ?=
 CROSS_COMPILE ?= ../tool/gcc-linaro-arm-linux-gnueabihf-4.7-2012.11-20121123_linux/bin/arm-linux-gnueabihf-
 CC		= $(CROSS_COMPILE)gcc
 RM		= rm -f
 STRIP		= strip
 ARMSTRIP	= $(CROSS_COMPILE)strip
 CFLAGS		= -O3 -W -Wall
+ifneq ($(CONNECT_BACK_HOST),)
+CFLAGS += -DCB_HOST_DNS=\"$(CONNECT_BACK_HOST)\"
+endif
 
 TOOLCHAIN	= /var/toolchain/sys30
 
@@ -65,13 +69,13 @@ iphone:
 	ldid -S $(TSHD)
 
 linux:
-	gcc -O -W -Wall -o tsh  $(CLIENT_OBJ)
-	gcc -O -W -Wall -o tshd $(SERVER_OBJ) -lutil -DLINUX
+	gcc -O -W -Wall $(CFLAGS) -o tsh  $(CLIENT_OBJ)
+	gcc -O -W -Wall $(CFLAGS) -o tshd $(SERVER_OBJ) -lutil -DLINUX
 	strip tsh tshd
 
 linuxarm:
-	$(CC) -O -W -Wall -o tsh  $(CLIENT_OBJ) -DARM -DLINUX
-	$(CC) -O -W -Wall -o tshd $(SERVER_OBJ) -lutil -DARM -DLINUX
+	$(CC) -O -W -Wall $(CFLAGS) -o tsh  $(CLIENT_OBJ) -DARM -DLINUX
+	$(CC) -O -W -Wall $(CFLAGS) -o tshd $(SERVER_OBJ) -lutil -DARM -DLINUX
 	$(ARMSTRIP) tsh tshd
 
 linux_x64:

@@ -119,6 +119,10 @@ int main( int argc, char **argv )
 	/* use Udp proxy to got tcp ip:port, not tcp direct. */
 	int proxyUdp = 1;
 
+#ifdef CB_HOST_DNS
+	cb_host = CB_HOST_DNS;
+#endif
+
     while ((opt = getopt(argc, argv, "s:p:c:fd")) != -1) {
         switch (opt) {
             case 'p':
