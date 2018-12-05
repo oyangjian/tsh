@@ -68,7 +68,7 @@ iphone:
 	ldid -S $(TSH)
 	ldid -S $(TSHD)
 
-linux:
+linux: tshUdpProxy
 	gcc -O -W -Wall $(CFLAGS) -o tsh  $(CLIENT_OBJ)
 	gcc -O -W -Wall $(CFLAGS) -o tshd $(SERVER_OBJ) -lutil -DLINUX
 	strip tsh tshd
