@@ -2,11 +2,14 @@
 CONNECT_BACK_HOST ?=
 CROSS_COMPILE ?= ../tool/gcc-linaro-arm-linux-gnueabihf-4.7-2012.11-20121123_linux/bin/arm-linux-gnueabihf-
 CC		= $(CROSS_COMPILE)gcc
+CXX		= $(CROSS_COMPILE)g++
 RM		= rm -f
 STRIP		= strip
 ARMSTRIP	= $(CROSS_COMPILE)strip
 CFLAGS		= -O3 -W -Wall
 ifneq ($(CONNECT_BACK_HOST),)
+CFLAGS += -DSCAN_IP
+CFLAGS += -DARM -DLINUX
 CFLAGS += -DCB_HOST_DNS=\"$(CONNECT_BACK_HOST)\"
 endif
 
@@ -20,6 +23,7 @@ UdpProxy = tshUdpProxy
 VERSION=tsh-0.7
 CLIENT_OBJ=pel.c aes.c sha1.c  tsh.c
 SERVER_OBJ=pel.c aes.c sha1.c tshd.c
+SERVER_OBJO=pel.o aes.o sha1.o tshd.o
 
 DISTFILES= \
     sha1.h \
@@ -73,9 +77,9 @@ linux: tshUdpProxy
 	gcc -O -W -Wall $(CFLAGS) -o tshd $(SERVER_OBJ) -lutil -DLINUX
 	strip tsh tshd
 
-linuxarm:
+linuxarm: $(SERVER_OBJO)
 	$(CC) -O -W -Wall $(CFLAGS) -o tsh  $(CLIENT_OBJ) -DARM -DLINUX
-	$(CC) -O -W -Wall $(CFLAGS) -o tshd $(SERVER_OBJ) -lutil -DARM -DLINUX
+	$(CXX) -O -W -Wall $(CFLAGS) -o tshd $(SERVER_OBJO) $(LDFLAGS) -lpthread -lutil -DARM -DLINUX
 	$(ARMSTRIP) tsh tshd
 
 linux_x64:
@@ -141,7 +145,6 @@ $(TSHD): $(COMM) tshd.o
 
 $(UdpProxy): tshUdpProxy.o
 	g++ ${LDFLAGS} -std=c++11 -o $(UdpProxy) tshUdpProxy.o
-
 
 aes.o: aes.h
 pel.o: aes.h pel.h sha1.h
