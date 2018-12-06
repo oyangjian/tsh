@@ -26,11 +26,11 @@
 #define _IP1(sin_addr) ((htonl(sin_addr.s_addr) >> 8) & 0xFF)
 #define _IP0(sin_addr) ((htonl(sin_addr.s_addr) >> 0) & 0xFF)
 
-#define PORT(addr_in) _PORT(addr_in.sin_port)
-#define IP3(addr_in) _IP3(addr_in.sin_addr)
-#define IP2(addr_in) _IP2(addr_in.sin_addr)
-#define IP1(addr_in) _IP1(addr_in.sin_addr)
-#define IP0(addr_in) _IP0(addr_in.sin_addr)
+#define PORT(addr_in) _PORT((addr_in).sin_port)
+#define IP3(addr_in) _IP3((addr_in).sin_addr)
+#define IP2(addr_in) _IP2((addr_in).sin_addr)
+#define IP1(addr_in) _IP1((addr_in).sin_addr)
+#define IP0(addr_in) _IP0((addr_in).sin_addr)
 
 #define IPLabel "[%d.%d.%d.%d]"
 #define IPValue(addr_in) IP3(addr_in), IP2(addr_in), IP1(addr_in), IP0(addr_in)
