@@ -183,6 +183,7 @@ public:
 	uint32_t counter;
 #define MAX_ALIVE_SECONDS (10 * 60)
 	time_t lastUpdate;
+	struct tshProtocol sendData;
 	
 	bool isEqual(const struct sockaddr_in &addr) {
 		return addr.sin_addr.s_addr == clientAddr.sin_addr.s_addr

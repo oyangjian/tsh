@@ -38,6 +38,10 @@ void usage(char *argv0)
 	fprintf(stderr, "Usage: %s [ -s secret ] [ -h host] [ -c ip:port] [ -p port ] [command]\n"
         "\n"
         "   <hostname|cb>\n"
+		"             get /tmp/test.log and save to /tmp dir\n"
+		"             put tsh.c and save to /tmp dir\n"
+		"  ./tsh -c xxx.xxx.xxx.xxx:47663 cb get /tmp/test.log /tmp\n"
+		"  ./tsh -c xxx.xxx.xxx.xxx:47663 cb put tsh.c /tmp\n"
         "   <hostname|cb> get <source-file> <dest-dir>\n"
         "   <hostname|cb> put <source-file> <dest-dir>\n", argv0);
     exit(1);

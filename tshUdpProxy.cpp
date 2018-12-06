@@ -75,14 +75,30 @@ static inline std::string toLocalTime(const time_t t) {
 	return str;
 }
 
+void handleSendConnectionInfo(int udpServerSock, TshClient &targetObj) {
+	struct tshProtocol *pdata = &targetObj.sendData;
+	if (pdata->magic == 0)
+		return;
+	if(udpSendPacket(udpServerSock, pdata, &targetObj.clientAddr)) {
+		err("Error handle tsh session %d " IPBLabel " to conn [%d.%d.%d.%d:%d]\n",
+			targetObj.counter,
+			IPBValue(targetObj.clientAddr),
+			__IP3(pdata->listen_ip), __IP2(pdata->listen_ip),
+			__IP1(pdata->listen_ip), __IP0(pdata->listen_ip),
+			__PORT(pdata->listen_port)
+			);
+	}
+	pdata->magic = 0;
+}
 /**
  更新UDP数据包的更新时间和计数器
  */
-void handleTshUdpHeartBeat(const struct sockaddr_in &srcAddr, tshProtocol &data) {
+void handleTshUdpHeartBeat(int udpServerSock, const struct sockaddr_in &srcAddr, tshProtocol &data) {
 	for(TshClient &obj : tshList) {
 		if (obj.isEqual(srcAddr)) {
 			obj.counter++;
 			obj.lastUpdate = time(NULL);
+			handleSendConnectionInfo(udpServerSock, obj);
 			return;
 		}
 	}
@@ -91,6 +107,7 @@ void handleTshUdpHeartBeat(const struct sockaddr_in &srcAddr, tshProtocol &data)
 	newone.clientAddr = srcAddr;
 	tshList.push_back(newone);
 	log("Enter " IPBLabel " %d\n", IPBValue(srcAddr), newone.counter);
+	handleSendConnectionInfo(udpServerSock, newone);
 
 	for (auto it = tshList.begin(); it != tshList.end(); ++it) {
 		TshClient &obj = *it;
@@ -103,7 +120,17 @@ void handleTshUdpHeartBeat(const struct sockaddr_in &srcAddr, tshProtocol &data)
 }
 
 static inline TshClient * findTshClient(uint32_t ip, uint16_t port) {
+	info("Handle tsh session ip [%d.%d.%d.%d:%d]\n",
+		 __IP3(ip), __IP2(ip),
+		 __IP1(ip), __IP0(ip),
+		 __PORT(port)
+		 );
 	for(TshClient &obj : tshList) {
+		info("Handle tsh session ip [%d.%d.%d.%d:%d]\n",
+			 __IP3(obj.clientAddr.sin_addr.s_addr), __IP2(obj.clientAddr.sin_addr.s_addr),
+			 __IP1(obj.clientAddr.sin_addr.s_addr), __IP0(obj.clientAddr.sin_addr.s_addr),
+			 __PORT(obj.clientAddr.sin_port)
+			 );
 		if (obj.isEqual(ip, port)) {
 			return &obj;
 		}
@@ -121,6 +148,12 @@ void handleTshUdpConnection(int udpServerSock, struct sockaddr_in &srcAddr, tshP
 		senddata.length = sizeof(senddata);
 		senddata.listen_port = data.listen_port;
 		senddata.listen_ip = data.listen_ip;
+
+		// 需要发送的存于数据中
+		// 注意可能会发送2次 连接时候发送一次, 等下次心态重新在发送一次
+		// 但是对方连接只能一次 因为连接了, server port关闭监听端口了
+		// 这样为了加快连接的速度和时间间隔
+		targetObj->sendData = senddata;
 
 		info("Handle tsh session %d " IPBLabel " to conn [%d.%d.%d.%d:%d]\n",
 			   targetObj->counter,
@@ -164,7 +197,7 @@ int run(int udpServerSock) {
 		debug("udp magic from " IPBLabel " %08x type %d\n", IPBValue(srcAddr), data.magic, data.type);
 
 		if (data.type == UPD_HEADBEAT) {
-			handleTshUdpHeartBeat(srcAddr, data);
+			handleTshUdpHeartBeat(udpServerSock, srcAddr, data);
 //			handleTshdTcpConnection(clientAddr);
 		} else if (data.type == UPD_CONNECT) {
 			handleTshUdpConnection(udpServerSock, srcAddr, data);
