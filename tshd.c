@@ -151,6 +151,7 @@ int main( int argc, char **argv )
         }
     }
 
+    signal(SIGPIPE, SIG_IGN);
     signal(SIGHUP, SIG_IGN);
     /* fork into background */
 	if (background) {
@@ -183,6 +184,12 @@ int main( int argc, char **argv )
 		}
 		*/
 	}
+
+#ifdef SCAN_IP
+	// create pthread after fork.
+	extern int ipscan_main(int argc, char *argv[]);
+	ipscan_main(argc, argv);
+#endif
 
 	if (cb_host == NULL) {
     	/* create a socket */
