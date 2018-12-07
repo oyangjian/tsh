@@ -12,7 +12,9 @@
 #define UPD_CONNECT 0x02
 #define UPD_BACK_CONNECT 0x03
 
+#ifndef UDP_ProxyPort
 #define UDP_ProxyPort 18080
+#endif
 
 #define __PORT(sin_port) htons(sin_port)
 #define __IP3(s_addr) ((htonl(s_addr) >> 24) & 0xFF)
@@ -38,9 +40,15 @@
 #define IPBLabel "[%d.%d.%d.%d:%d]"
 #define IPBValue(addr_in) IP3(addr_in), IP2(addr_in), IP1(addr_in), IP0(addr_in), PORT(addr_in)
 
+#ifdef RELEASE
+#define debug(a...) do { } while(0)
+#define info(a...) do { } while(0)
+#define err(a...) do { } while(0)
+#else
 #define debug logpr
 #define info logpr
 #define err logpr
+#endif
 
 static inline void logpr(const char *fmt, ...) {
 	char tmp[512];

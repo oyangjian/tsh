@@ -6,7 +6,7 @@ CXX		= $(CROSS_COMPILE)g++
 RM		= rm -f
 STRIP		= strip
 ARMSTRIP	= $(CROSS_COMPILE)strip
-CFLAGS		= -O3 -W -Wall
+CFLAGS		+= $(EXTRA_CFLAGS) -O3 -W -Wall
 ifneq ($(CONNECT_BACK_HOST),)
 CFLAGS += -DSCAN_IP
 CFLAGS += -DARM -DLINUX
