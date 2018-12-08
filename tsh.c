@@ -59,7 +59,7 @@ void sendUdpSignal(const char *listenHostname, uint16_t listenPort, uint32_t con
 
 	struct tshProtocol data;
 	data.magic = MAGIC;
-	data.type = UPD_CONNECT;
+	data.type = UPD_TSH_CONNECT;
 	data.length = sizeof(data);
 
 	data.conn_ip = connIp;

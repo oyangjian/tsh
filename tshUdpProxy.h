@@ -9,8 +9,9 @@
 
 #define MAGIC 0xFEADDEAF
 #define UPD_HEADBEAT 0x01
-#define UPD_CONNECT 0x02
+#define UPD_TSH_CONNECT 0x02
 #define UPD_BACK_CONNECT 0x03
+#define UPD_PAYLOAD_DATA 0x80
 
 #ifndef UDP_ProxyPort
 #define UDP_ProxyPort 18080
@@ -99,6 +100,11 @@ struct tshProtocol {
 	uint16_t listen_port;
 };
 
+#ifndef __cplusplus
+#define true 1
+#define false 0
+#define bool int
+#endif
 
 static inline ssize_t udpRecvfrom(int s, void *data, size_t dataLen, struct sockaddr_in *srcAddr) {
 	int clientAddrLen = sizeof(struct sockaddr_in);
@@ -113,32 +119,52 @@ static inline ssize_t udpRecvfrom(int s, void *data, size_t dataLen, struct sock
 	}
 	return ret;
 }
-static inline ssize_t udpRecvPacket(int s, struct tshProtocol *data, struct sockaddr_in *srcAddr) {
+static inline bool udpRecvPacket(int s, struct tshProtocol *data, struct sockaddr_in *srcAddr) {
 	struct sockaddr_in clientAddr;
 	int clientAddrLen = sizeof(struct sockaddr_in);
 	size_t dataLen = sizeof(struct tshProtocol);
 	ssize_t ret;
 
 	if (NULL == data)
-		return -1;
+		return false;
 
 	ret = recvfrom(s, data, dataLen,
 						   MSG_WAITALL, (struct sockaddr *)&clientAddr,
 						   (socklen_t *)&clientAddrLen);
 	if (ret != (ssize_t)dataLen)
-		return -1;
+		return false;
 	
 	if (srcAddr) {
 		*srcAddr = clientAddr;
 	}
-	return ret;
+	return true;
 }
 
-static inline int udpSendPacket(int s, struct tshProtocol *data, struct sockaddr_in *toAddr) {
+static inline bool udpRecvData(int s, char *outData, size_t len) {
+	if (outData == NULL || len == 0)
+		return false;
+
+	ssize_t ret = recvfrom(s, (void *)outData, len, MSG_WAITALL, NULL, NULL);
+	if (ret != (ssize_t)len)
+		return false;
+
+	return true;
+}
+
+#ifdef __cplusplus
+static inline bool udpSendString(int s, std::string &str, struct sockaddr_in *toAddr) {
+	ssize_t ret = sendto(s, (const void *)str.c_str(), (size_t)str.length(), 0, (const struct sockaddr *)toAddr, (socklen_t)sizeof(struct sockaddr_in));
+	if (ret != (ssize_t)str.length())
+		return false;
+	return true;
+}
+#endif
+
+static inline bool udpSendPacket(int s, struct tshProtocol *data, struct sockaddr_in *toAddr) {
 	ssize_t ret = sendto(s, (const void *)data, (size_t)sizeof(struct tshProtocol), 0, (const struct sockaddr *)toAddr, (socklen_t)sizeof(struct sockaddr_in));
 	if (ret != sizeof(struct tshProtocol))
-		return -1;
-	return 0;
+		return false;
+	return true;
 }
 
 static inline struct sockaddr_in parseHostAndPort(const char *host, uint16_t port) {

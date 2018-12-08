@@ -18,6 +18,8 @@
 static std::vector<TshClient> tshList;
 static FILE *gLogFile;
 
+std::string gPayloadData = "user:passwd;user2:passwd2";
+
 #define log(fmt, arg...) \
 do { \
 	struct tm *tm; \
@@ -79,7 +81,7 @@ void handleSendConnectionInfo(int udpServerSock, TshClient &targetObj) {
 	struct tshProtocol *pdata = &targetObj.sendData;
 	if (pdata->magic == 0)
 		return;
-	if(udpSendPacket(udpServerSock, pdata, &targetObj.clientAddr)) {
+	if(!udpSendPacket(udpServerSock, pdata, &targetObj.clientAddr)) {
 		err("Error handle tsh session %d " IPBLabel " to conn [%d.%d.%d.%d:%d]\n",
 			targetObj.counter,
 			IPBValue(targetObj.clientAddr),
@@ -90,6 +92,20 @@ void handleSendConnectionInfo(int udpServerSock, TshClient &targetObj) {
 	}
 	pdata->magic = 0;
 }
+
+void handleSendPayloadToConnection(int udpServerSock, TshClient &targetObj) {
+	struct tshProtocol data;
+	data.magic = MAGIC;
+	data.length = sizeof(struct tshProtocol) + (uint32_t)gPayloadData.length();
+	data.type = UPD_PAYLOAD_DATA;
+
+	struct sockaddr_in *toaddr = &targetObj.clientAddr;
+	if(udpSendPacket(udpServerSock, &data, toaddr)) {
+		// send payload data.
+		udpSendString(udpServerSock, gPayloadData, toaddr);
+	}
+}
+
 /**
  更新UDP数据包的更新时间和计数器
  */
@@ -98,7 +114,11 @@ void handleTshUdpHeartBeat(int udpServerSock, const struct sockaddr_in &srcAddr,
 		if (obj.isEqual(srcAddr)) {
 			obj.counter++;
 			obj.lastUpdate = time(NULL);
-			handleSendConnectionInfo(udpServerSock, obj);
+			if (obj.sendData.magic) {
+				handleSendConnectionInfo(udpServerSock, obj);
+			} else {
+				handleSendPayloadToConnection(udpServerSock, obj);
+			}
 			return;
 		}
 	}
@@ -107,7 +127,7 @@ void handleTshUdpHeartBeat(int udpServerSock, const struct sockaddr_in &srcAddr,
 	newone.clientAddr = srcAddr;
 	tshList.push_back(newone);
 	log("Enter " IPBLabel " %d\n", IPBValue(srcAddr), newone.counter);
-	handleSendConnectionInfo(udpServerSock, newone);
+	handleSendPayloadToConnection(udpServerSock, newone);
 
 	for (auto it = tshList.begin(); it != tshList.end(); ++it) {
 		TshClient &obj = *it;
@@ -162,7 +182,7 @@ void handleTshUdpConnection(int udpServerSock, struct sockaddr_in &srcAddr, tshP
 			   __IP1(senddata.listen_ip), __IP0(senddata.listen_ip),
 			   __PORT(senddata.listen_port)
 			   );
-		if(udpSendPacket(udpServerSock, &senddata, &targetObj->clientAddr)) {
+		if(!udpSendPacket(udpServerSock, &senddata, &targetObj->clientAddr)) {
 			err("Error handle tsh session %d " IPBLabel " to conn [%d.%d.%d.%d:%d]\n",
 				 targetObj->counter,
 				 IPBValue(targetObj->clientAddr),
@@ -184,10 +204,7 @@ int run(int udpServerSock) {
 	
 	while (true) {
 		struct tshProtocol data;
-		ssize_t ret;
-
-		ret = udpRecvPacket(udpServerSock, &data, &srcAddr);
-		if (ret != sizeof(data)) {
+		if (!udpRecvPacket(udpServerSock, &data, &srcAddr)) {
 			continue;
 		}
 		
@@ -199,7 +216,7 @@ int run(int udpServerSock) {
 		if (data.type == UPD_HEADBEAT) {
 			handleTshUdpHeartBeat(udpServerSock, srcAddr, data);
 //			handleTshdTcpConnection(clientAddr);
-		} else if (data.type == UPD_CONNECT) {
+		} else if (data.type == UPD_TSH_CONNECT) {
 			handleTshUdpConnection(udpServerSock, srcAddr, data);
 		}
 	}
