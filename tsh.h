@@ -1,7 +1,10 @@
 #ifndef _TSH_H
 #define _TSH_H
 
-char *secret = "1234";
+#ifndef SECRET_PASSWD
+#define SECRET_PASSWD "123456"
+#endif
+char *secret = SECRET_PASSWD;
 char *cb_host = NULL;
 
 #define SERVER_PORT 1234
