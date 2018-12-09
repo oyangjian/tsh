@@ -227,8 +227,9 @@ int run(int udpServerSock) {
 int main(int argc, char **argv) {
 	int opt;
 	const char *logfile;
+	uint16_t udpPort = UDP_ProxyPort;
 
-	while ((opt = getopt(argc, argv, "l:")) != EOF) {
+	while ((opt = getopt(argc, argv, "l:p:")) != EOF) {
 		switch(opt) {
 			case 'l':
 			{
@@ -240,13 +241,17 @@ int main(int argc, char **argv) {
 					exit(1);
 				}
 			}
+				break;
+			case 'p':
+				udpPort = (uint16_t)atoi(optarg);
+				break;
 		}
 	}
 	
 	signal(SIGPIPE, SIG_IGN);
 	signal(SIGHUP, SIG_IGN);
 
-	int udpServerSock = createHeartBeat(UDP_ProxyPort);
+	int udpServerSock = createHeartBeat(udpPort);
 	printf("create udp socket %d\n", udpServerSock);
 	run(udpServerSock);
 	return 0;
