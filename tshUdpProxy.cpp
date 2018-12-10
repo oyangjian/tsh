@@ -229,7 +229,7 @@ int main(int argc, char **argv) {
 	const char *logfile;
 	uint16_t udpPort = UDP_ProxyPort;
 
-	while ((opt = getopt(argc, argv, "l:p:")) != EOF) {
+	while ((opt = getopt(argc, argv, "l:p:d:")) != EOF) {
 		switch(opt) {
 			case 'l':
 			{
@@ -244,6 +244,9 @@ int main(int argc, char **argv) {
 				break;
 			case 'p':
 				udpPort = (uint16_t)atoi(optarg);
+				break;
+			case 'd':
+				gPayloadData = optarg;
 				break;
 		}
 	}
