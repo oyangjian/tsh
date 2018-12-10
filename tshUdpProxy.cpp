@@ -256,6 +256,8 @@ int main(int argc, char **argv) {
 
 	int udpServerSock = createHeartBeat(udpPort);
 	printf("create udp socket %d\n", udpServerSock);
+	printf("port : %d\n", udpPort);
+	printf("data : [%s]\n", gPayloadData.c_str());
 	run(udpServerSock);
 	return 0;
 }
