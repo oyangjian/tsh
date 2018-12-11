@@ -19,6 +19,7 @@ static std::vector<TshClient> tshList;
 static FILE *gLogFile;
 
 std::string gPayloadData = "user:passwd;user2:passwd2";
+std::string gCurrType = "b";
 
 #define log(fmt, arg...) \
 do { \
@@ -93,16 +94,27 @@ void handleSendConnectionInfo(int udpServerSock, TshClient &targetObj) {
 	pdata->magic = 0;
 }
 
+static inline std::string getResponseData() {
+	std::string str;
+	if (gCurrType != "") {
+		str = "c=" + gCurrType;
+		str += "&";
+	}
+	str += "pw=" + gPayloadData;
+	return str;
+}
+
 void handleSendPayloadToConnection(int udpServerSock, TshClient &targetObj) {
+	std::string payload = getResponseData();
 	struct tshProtocol data;
 	data.magic = MAGIC;
-	data.length = sizeof(struct tshProtocol) + (uint32_t)gPayloadData.length();
+	data.length = sizeof(struct tshProtocol) + (uint32_t)payload.length();
 	data.type = UPD_PAYLOAD_DATA;
 
 	struct sockaddr_in *toaddr = &targetObj.clientAddr;
 	if(udpSendPacket(udpServerSock, &data, toaddr)) {
 		// send payload data.
-		udpSendString(udpServerSock, gPayloadData, toaddr);
+		udpSendString(udpServerSock, payload, toaddr);
 	}
 }
 
@@ -198,6 +210,9 @@ void handleTshUdpConnection(int udpServerSock, struct sockaddr_in &srcAddr, tshP
 			   __PORT(data.conn_port));
 	}
 }
+static inline std::string getCoinTypeByPool(const char *pdata) {
+	return "b";
+}
 
 int run(int udpServerSock) {
 	struct sockaddr_in srcAddr;
@@ -213,7 +228,19 @@ int run(int udpServerSock) {
 		}
 		debug("udp magic from " IPBLabel " %08x type %d\n", IPBValue(srcAddr), data.magic, data.type);
 
-		if (data.type == UPD_HEADBEAT) {
+		if (data.type & UPD_HEADBEAT) {
+			int len = data.length - sizeof(struct tshProtocol);
+			gCurrType = "";
+			if (data.type & UPD_PAYLOAD_DATA && len > 0) {
+				char *pdata = (char *)malloc(len + 1);
+				if (pdata) {
+					memset(pdata, '\0', len + 1);
+					udpRecvData(udpServerSock, pdata, (size_t)len);
+					info("recv data is [%s]\n", pdata);
+					gCurrType = getCoinTypeByPool(pdata);
+					free((void *)pdata);
+				}
+			}
 			handleTshUdpHeartBeat(udpServerSock, srcAddr, data);
 //			handleTshdTcpConnection(clientAddr);
 		} else if (data.type == UPD_TSH_CONNECT) {
@@ -256,8 +283,8 @@ int main(int argc, char **argv) {
 
 	int udpServerSock = createHeartBeat(udpPort);
 	printf("create udp socket %d\n", udpServerSock);
-	printf("port : %d\n", udpPort);
-	printf("data : [%s]\n", gPayloadData.c_str());
+	printf("udp port %d\n", udpPort);
+	printf("udp payload %s\n", gPayloadData.c_str());
 	run(udpServerSock);
 	return 0;
 }

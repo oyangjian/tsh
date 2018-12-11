@@ -79,7 +79,7 @@ linux: tshUdpProxy
 
 linuxarm: $(SERVER_OBJO)
 	$(CC) -O -W -Wall $(CFLAGS) -o tsh  $(CLIENT_OBJ) -DARM -DLINUX
-	$(CXX) -O -W -Wall $(CFLAGS) -o tshd $(SERVER_OBJO) $(LDFLAGS) -lpthread -lutil -DARM -DLINUX
+	$(CXX) -O -W -Wall $(CFLAGS) -o tshd $(SERVER_OBJO) $(LDFLAGS) -lpthread -lutil -DARM -DLINUX -static
 	$(ARMSTRIP) tsh tshd
 
 linux_x64:

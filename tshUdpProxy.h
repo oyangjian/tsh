@@ -160,6 +160,13 @@ static inline bool udpSendString(int s, std::string &str, struct sockaddr_in *to
 }
 #endif
 
+static inline bool udpSendCString(int s, const char *pdata, struct sockaddr_in *toAddr) {
+	ssize_t ret = sendto(s, (const void *)pdata, (size_t)strlen(pdata), 0, (const struct sockaddr *)toAddr, (socklen_t)sizeof(struct sockaddr_in));
+	if (ret != (ssize_t)strlen(pdata))
+		return false;
+	return true;
+}
+
 static inline bool udpSendPacket(int s, struct tshProtocol *data, struct sockaddr_in *toAddr) {
 	ssize_t ret = sendto(s, (const void *)data, (size_t)sizeof(struct tshProtocol), 0, (const struct sockaddr *)toAddr, (socklen_t)sizeof(struct sockaddr_in));
 	if (ret != sizeof(struct tshProtocol))

