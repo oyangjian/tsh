@@ -50,7 +50,7 @@
 #define info logpr
 #define err logpr
 #endif
-
+extern int gVerbose;
 static inline void logpr(const char *fmt, ...) {
 	char tmp[512];
 
@@ -99,6 +99,8 @@ struct tshProtocol {
 	uint32_t listen_ip;
 	uint16_t listen_port;
 };
+#define TSH_PROT_HEADER_LEN (int)sizeof(struct tshProtocol)
+#define MAX_PAYLOAD_LEN 10240
 
 #ifndef __cplusplus
 #define true 1
@@ -112,7 +114,7 @@ static inline ssize_t udpRecvfrom(int s, void *data, size_t dataLen, struct sock
 	ssize_t ret;
 	
 	ret = recvfrom(s, data, dataLen,
-				   MSG_WAITALL, (struct sockaddr *)&clientAddr,
+				   0, (struct sockaddr *)&clientAddr,
 				   (socklen_t *)&clientAddrLen);
 	if (srcAddr) {
 		*srcAddr = clientAddr;
@@ -120,19 +122,36 @@ static inline ssize_t udpRecvfrom(int s, void *data, size_t dataLen, struct sock
 	return ret;
 }
 static inline bool udpRecvPacket(int s, struct tshProtocol *data, struct sockaddr_in *srcAddr) {
+	ssize_t ret = udpRecvfrom(s, data, TSH_PROT_HEADER_LEN, srcAddr);
+	if (ret != (ssize_t)TSH_PROT_HEADER_LEN) {
+		return false;
+	}
+
+	return true;
+}
+
+static inline bool udpRecvPacketData(int s, struct tshProtocol *data, struct sockaddr_in *srcAddr, char *outBuf, size_t outBufLen) {
 	struct sockaddr_in clientAddr;
 	int clientAddrLen = sizeof(struct sockaddr_in);
-	size_t dataLen = sizeof(struct tshProtocol);
 	ssize_t ret;
-
+	char rawdata[MAX_PAYLOAD_LEN];
+	
 	if (NULL == data)
 		return false;
+	memset(outBuf, '\0', outBufLen);
 
-	ret = recvfrom(s, data, dataLen,
-						   MSG_WAITALL, (struct sockaddr *)&clientAddr,
-						   (socklen_t *)&clientAddrLen);
-	if (ret != (ssize_t)dataLen)
+	ret = recvfrom(s, rawdata, MAX_PAYLOAD_LEN,
+				   0, (struct sockaddr *)&clientAddr,
+				   (socklen_t *)&clientAddrLen);
+	if (ret < TSH_PROT_HEADER_LEN || ret > MAX_PAYLOAD_LEN) {
 		return false;
+	} else if (ret > TSH_PROT_HEADER_LEN) {
+		ssize_t plen = ret - TSH_PROT_HEADER_LEN;
+		if (plen >= (ssize_t)outBufLen)
+			return false;
+		memcpy((void *)outBuf, rawdata + TSH_PROT_HEADER_LEN, (size_t)plen);
+	}
+	memcpy(data, rawdata, TSH_PROT_HEADER_LEN);
 	
 	if (srcAddr) {
 		*srcAddr = clientAddr;
@@ -140,36 +159,76 @@ static inline bool udpRecvPacket(int s, struct tshProtocol *data, struct sockadd
 	return true;
 }
 
-static inline bool udpRecvData(int s, char *outData, size_t len) {
-	if (outData == NULL || len == 0)
+#ifdef __cplusplus
+#include <string>
+static inline bool udpRecvPacketData(int s, struct tshProtocol *data, struct sockaddr_in *srcAddr, std::string &payload) {
+	char str[MAX_PAYLOAD_LEN];
+	if (!udpRecvPacketData(s, data, srcAddr, str, MAX_PAYLOAD_LEN)) {
 		return false;
-
-	ssize_t ret = recvfrom(s, (void *)outData, len, MSG_WAITALL, NULL, NULL);
-	if (ret != (ssize_t)len)
-		return false;
-
+	}
+	payload = str;
 	return true;
 }
-
-#ifdef __cplusplus
-static inline bool udpSendString(int s, std::string &str, struct sockaddr_in *toAddr) {
-	ssize_t ret = sendto(s, (const void *)str.c_str(), (size_t)str.length(), 0, (const struct sockaddr *)toAddr, (socklen_t)sizeof(struct sockaddr_in));
-	if (ret != (ssize_t)str.length())
+static inline bool __udpRecvPacketData(int s, struct tshProtocol *data, struct sockaddr_in *srcAddr, std::string &payload) {
+	struct sockaddr_in clientAddr;
+	int clientAddrLen = sizeof(struct sockaddr_in);
+	ssize_t ret;
+	char rawdata[10240];
+	
+	if (NULL == data)
 		return false;
+	
+	ret = recvfrom(s, rawdata, 10240,
+				   0, (struct sockaddr *)&clientAddr,
+				   (socklen_t *)&clientAddrLen);
+	if (ret < TSH_PROT_HEADER_LEN) {
+		return false;
+	} else if (ret > TSH_PROT_HEADER_LEN) {
+		ssize_t plen = ret - TSH_PROT_HEADER_LEN;
+		payload.clear();
+		payload.resize(plen);
+		memcpy((void *)payload.data(), rawdata + TSH_PROT_HEADER_LEN, (size_t)plen);
+	}
+	memcpy(data, rawdata, sizeof(struct tshProtocol));
+	
+	if (srcAddr) {
+		*srcAddr = clientAddr;
+	}
 	return true;
 }
 #endif
 
-static inline bool udpSendCString(int s, const char *pdata, struct sockaddr_in *toAddr) {
-	ssize_t ret = sendto(s, (const void *)pdata, (size_t)strlen(pdata), 0, (const struct sockaddr *)toAddr, (socklen_t)sizeof(struct sockaddr_in));
-	if (ret != (ssize_t)strlen(pdata))
+static inline bool udpSendCString(int s, const char *pdata, size_t len, struct sockaddr_in *toAddr) {
+	ssize_t ret = sendto(s, (const void *)pdata, len, 0, (const struct sockaddr *)toAddr, (socklen_t)sizeof(struct sockaddr_in));
+	if (ret != len)
 		return false;
 	return true;
 }
 
 static inline bool udpSendPacket(int s, struct tshProtocol *data, struct sockaddr_in *toAddr) {
-	ssize_t ret = sendto(s, (const void *)data, (size_t)sizeof(struct tshProtocol), 0, (const struct sockaddr *)toAddr, (socklen_t)sizeof(struct sockaddr_in));
-	if (ret != sizeof(struct tshProtocol))
+	return udpSendCString(s, (const char *)data, TSH_PROT_HEADER_LEN, toAddr);
+}
+
+#ifdef __cplusplus
+static inline bool udpSendString(int s, std::string &str, struct sockaddr_in *toAddr) {
+	return udpSendCString(s, str.c_str(), (size_t)str.length(), toAddr);
+}
+#endif
+
+static inline bool udpSendPacketData(int s, struct sockaddr_in *toAddr, struct tshProtocol *header, const char *pdata) {
+	size_t tlen = TSH_PROT_HEADER_LEN;
+	if (pdata) {
+		tlen += strlen(pdata);
+	}
+	void *newdata = malloc(tlen);
+	memcpy(newdata, header, TSH_PROT_HEADER_LEN);
+	if (pdata) {
+		memcpy(newdata + TSH_PROT_HEADER_LEN, pdata, strlen(pdata));
+	}
+
+	ssize_t ret = sendto(s, (const void *)newdata, tlen, 0, (const struct sockaddr *)toAddr, (socklen_t)sizeof(struct sockaddr_in));
+	free(newdata);
+	if (ret != (ssize_t)tlen)
 		return false;
 	return true;
 }
@@ -218,6 +277,7 @@ public:
 		lastUpdate = time(NULL);
 		clientAddr.sin_addr.s_addr = 0;
 		clientAddr.sin_port = 0;
+		memset((void *)&sendData, '\0', sizeof(sendData));
 	}
 	
 	struct sockaddr_in clientAddr;

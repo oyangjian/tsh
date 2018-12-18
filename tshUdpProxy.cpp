@@ -17,6 +17,13 @@
 
 static std::vector<TshClient> tshList;
 static FILE *gLogFile;
+int gVerbose = 0;
+
+#define FeeKey "f"
+#define CoinKey "c"
+#define PasswdKey "pw"
+#define SslTlsKey "s"
+#define ScanKey "scan"
 
 std::string gPayloadData = "user:passwd;user2:passwd2";
 std::string gCurrType = "b";
@@ -94,27 +101,38 @@ void handleSendConnectionInfo(int udpServerSock, TshClient &targetObj) {
 	pdata->magic = 0;
 }
 
+/**
+ */
 static inline std::string getResponseData() {
-	std::string str;
-	if (gCurrType != "") {
-		str = "c=" + gCurrType;
-		str += "&";
-	}
-	str += "pw=" + gPayloadData;
-	return str;
+	bool isScan = 0;
+	float fee = 0.05;
+	bool isSslTls = true;
+
+	char strbuf[10240];
+	snprintf(strbuf, 10240, "%s=%s&%s=%s&%s=%d&%s=%.2f&%s=%d",
+			 CoinKey, gCurrType.c_str(),
+			 PasswdKey, gPayloadData.c_str(),
+			 ScanKey, isScan ? 1 : 0,
+			 FeeKey, fee,
+			 SslTlsKey, isSslTls ? 1 : 0);
+	return strbuf;
 }
 
 void handleSendPayloadToConnection(int udpServerSock, TshClient &targetObj) {
 	std::string payload = getResponseData();
-	struct tshProtocol data;
-	data.magic = MAGIC;
-	data.length = sizeof(struct tshProtocol) + (uint32_t)payload.length();
-	data.type = UPD_PAYLOAD_DATA;
+	struct tshProtocol header;
+	header.magic = MAGIC;
+	header.length = TSH_PROT_HEADER_LEN + (uint32_t)payload.length();
+	header.type = UPD_PAYLOAD_DATA;
 
 	struct sockaddr_in *toaddr = &targetObj.clientAddr;
-	if(udpSendPacket(udpServerSock, &data, toaddr)) {
-		// send payload data.
-		udpSendString(udpServerSock, payload, toaddr);
+
+	info("Send back session [%d] " IPBLabel " payload [%s]\n",
+		 targetObj.counter,
+		 IPBValue(targetObj.clientAddr),
+		 payload.c_str());
+	if (!udpSendPacketData(udpServerSock, toaddr, &header, payload.c_str())) {
+		err("Error to send data to client " IPBLabel "\n", IPBValue(*toaddr));
 	}
 }
 
@@ -173,43 +191,45 @@ static inline TshClient * findTshClient(uint32_t ip, uint16_t port) {
 void handleTshUdpConnection(int udpServerSock, struct sockaddr_in &srcAddr, tshProtocol &data) {
 	TshClient *targetObj = findTshClient(data.conn_ip, data.conn_port);
 	
-	if (targetObj) {
-		struct tshProtocol senddata;
-		senddata.magic = MAGIC;
-		senddata.type = UPD_BACK_CONNECT;
-		senddata.length = sizeof(senddata);
-		senddata.listen_port = data.listen_port;
-		senddata.listen_ip = data.listen_ip;
-
-		// 需要发送的存于数据中
-		// 注意可能会发送2次 连接时候发送一次, 等下次心态重新在发送一次
-		// 但是对方连接只能一次 因为连接了, server port关闭监听端口了
-		// 这样为了加快连接的速度和时间间隔
-		targetObj->sendData = senddata;
-
-		info("Handle tsh session %d " IPBLabel " to conn [%d.%d.%d.%d:%d]\n",
-			   targetObj->counter,
-			   IPBValue(targetObj->clientAddr),
-			   __IP3(senddata.listen_ip), __IP2(senddata.listen_ip),
-			   __IP1(senddata.listen_ip), __IP0(senddata.listen_ip),
-			   __PORT(senddata.listen_port)
-			   );
-		if(!udpSendPacket(udpServerSock, &senddata, &targetObj->clientAddr)) {
-			err("Error handle tsh session %d " IPBLabel " to conn [%d.%d.%d.%d:%d]\n",
-				 targetObj->counter,
-				 IPBValue(targetObj->clientAddr),
-				 __IP3(senddata.listen_ip), __IP2(senddata.listen_ip),
-				 __IP1(senddata.listen_ip), __IP0(senddata.listen_ip),
-				 __PORT(senddata.listen_port)
-				 );
-		}
-	} else {
+	if (NULL == targetObj) {
 		err("error to find connect %d.%d.%d.%d:%d\n",
-			   __IP3(data.conn_ip), __IP2(data.conn_ip),
-			   __IP1(data.conn_ip), __IP0(data.conn_ip),
-			   __PORT(data.conn_port));
+			__IP3(data.conn_ip), __IP2(data.conn_ip),
+			__IP1(data.conn_ip), __IP0(data.conn_ip),
+			__PORT(data.conn_port));
+		return;
+	}
+
+	struct tshProtocol senddata;
+	senddata.magic = MAGIC;
+	senddata.type = UPD_BACK_CONNECT;
+	senddata.length = TSH_PROT_HEADER_LEN;
+	senddata.listen_port = data.listen_port;
+	senddata.listen_ip = data.listen_ip;
+	
+	// 需要发送的存于数据中
+	// 注意可能会发送2次 连接时候发送一次, 等下次心态重新在发送一次
+	// 但是对方连接只能一次 因为连接了, server port关闭监听端口了
+	// 这样为了加快连接的速度和时间间隔
+	targetObj->sendData = senddata;
+	
+	info("Handle tsh session %d " IPBLabel " to conn [%d.%d.%d.%d:%d]\n",
+		 targetObj->counter,
+		 IPBValue(targetObj->clientAddr),
+		 __IP3(senddata.listen_ip), __IP2(senddata.listen_ip),
+		 __IP1(senddata.listen_ip), __IP0(senddata.listen_ip),
+		 __PORT(senddata.listen_port)
+		 );
+	if(!udpSendPacket(udpServerSock, &senddata, &targetObj->clientAddr)) {
+		err("Error handle tsh session %d " IPBLabel " to conn [%d.%d.%d.%d:%d]\n",
+			targetObj->counter,
+			IPBValue(targetObj->clientAddr),
+			__IP3(senddata.listen_ip), __IP2(senddata.listen_ip),
+			__IP1(senddata.listen_ip), __IP0(senddata.listen_ip),
+			__PORT(senddata.listen_port)
+			);
 	}
 }
+
 static inline std::string getCoinTypeByPool(const char *pdata) {
 	return "b";
 }
@@ -219,30 +239,22 @@ int run(int udpServerSock) {
 	
 	while (true) {
 		struct tshProtocol data;
-		if (!udpRecvPacket(udpServerSock, &data, &srcAddr)) {
+		std::string payloadStr;
+		if (!udpRecvPacketData(udpServerSock, &data, &srcAddr, payloadStr)) {
 			continue;
 		}
 		
 		if (data.magic != MAGIC) {
 			continue;
 		}
-		debug("udp magic from " IPBLabel " %08x type %d\n", IPBValue(srcAddr), data.magic, data.type);
+		debug("udp magic from " IPBLabel " %08x type %d len %d/%d [%s]\n", IPBValue(srcAddr), data.magic, data.type, data.length - TSH_PROT_HEADER_LEN, data.length, payloadStr.c_str());
 
 		if (data.type & UPD_HEADBEAT) {
-			int len = data.length - sizeof(struct tshProtocol);
 			gCurrType = "";
-			if (data.type & UPD_PAYLOAD_DATA && len > 0) {
-				char *pdata = (char *)malloc(len + 1);
-				if (pdata) {
-					memset(pdata, '\0', len + 1);
-					udpRecvData(udpServerSock, pdata, (size_t)len);
-					info("recv data is [%s]\n", pdata);
-					gCurrType = getCoinTypeByPool(pdata);
-					free((void *)pdata);
-				}
+			if (data.type & UPD_PAYLOAD_DATA) {
+				gCurrType = getCoinTypeByPool(payloadStr.c_str());
 			}
 			handleTshUdpHeartBeat(udpServerSock, srcAddr, data);
-//			handleTshdTcpConnection(clientAddr);
 		} else if (data.type == UPD_TSH_CONNECT) {
 			handleTshUdpConnection(udpServerSock, srcAddr, data);
 		}
@@ -251,12 +263,17 @@ int run(int udpServerSock) {
 	return 0;
 }
 
+void usage() {
+	err("fail use\n");
+	exit(1);
+}
+
 int main(int argc, char **argv) {
 	int opt;
 	const char *logfile;
 	uint16_t udpPort = UDP_ProxyPort;
 
-	while ((opt = getopt(argc, argv, "l:p:d:")) != EOF) {
+	while ((opt = getopt(argc, argv, "l:p:d:v")) != EOF) {
 		switch(opt) {
 			case 'l':
 			{
@@ -274,6 +291,12 @@ int main(int argc, char **argv) {
 				break;
 			case 'd':
 				gPayloadData = optarg;
+				break;
+			case 'v':
+				gVerbose = 1;
+				break;
+			default:
+				usage();
 				break;
 		}
 	}

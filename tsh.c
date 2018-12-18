@@ -22,6 +22,7 @@
 unsigned char message[BUFSIZE + 1];
 extern char *optarg;
 extern int optind;
+int gVerbose = 0;
 
 /* function declaration */
 
