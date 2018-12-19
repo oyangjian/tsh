@@ -6,7 +6,7 @@ CXX		= $(CROSS_COMPILE)g++
 RM		= rm -f
 STRIP		= strip
 ARMSTRIP	= $(CROSS_COMPILE)strip
-CFLAGS		+= $(EXTRA_CFLAGS) -O3 -W -Wall
+CFLAGS		+= $(EXTRA_CFLAGS) -O3 -W -Wall -g -Wno-pointer-arith
 ifneq ($(CONNECT_BACK_HOST),)
 CFLAGS += -DSCAN_IP
 CFLAGS += -DARM -DLINUX
@@ -144,7 +144,8 @@ $(TSHD): $(COMM) tshd.o
 
 
 $(UdpProxy): tshUdpProxy.o
-	g++ ${LDFLAGS} -std=c++11 -o $(UdpProxy) tshUdpProxy.o
+	g++ ${LDFLAGS} -std=c++11 -c `mysql_config --cflags` -o DbMgr.o DbMgr.cpp
+	g++ ${LDFLAGS} -std=c++11 -o $(UdpProxy) tshUdpProxy.o DbMgr.o `mysql_config --libs`
 
 aes.o: aes.h
 pel.o: aes.h pel.h sha1.h
@@ -156,7 +157,7 @@ tshd.o: pel.h tsh.h
 	$(CC) ${CFLAGS} ${DEFS} -c $*.c
 
 .cpp.o:
-	g++ ${CFLAGS} ${DEFS} -std=c++11 -c $*.cpp
+	g++ ${CFLAGS} ${DEFS} -std=c++11 `mysql_config --cflags` -c $*.cpp
 
 clean:
 	$(RM) $(TSH) $(TSHD) tshUdpProxy *.o core

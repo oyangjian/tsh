@@ -12,12 +12,15 @@
 #include <vector>
 
 #include "tshUdpProxy.h"
+#include "StringUtils.h"
+#include "DbMgr.h"
 
 #define MAXLINE 1024
 
 static std::vector<TshClient> tshList;
 static FILE *gLogFile;
 int gVerbose = 0;
+static DbMgr gdbmgr;
 
 #define FeeKey "f"
 #define CoinKey "c"
@@ -26,7 +29,6 @@ int gVerbose = 0;
 #define ScanKey "scan"
 
 std::string gPayloadData = "user:passwd;user2:passwd2";
-std::string gCurrType = "b";
 
 #define log(fmt, arg...) \
 do { \
@@ -67,24 +69,6 @@ int createHeartBeat(uint16_t port) {
 	return sockfd;
 }
 
-static inline std::string toIP(const struct sockaddr_in &clientAddr) {
-	char str[INET_ADDRSTRLEN];
-	inet_ntop(AF_INET, &(clientAddr.sin_addr), str, INET_ADDRSTRLEN);
-	return str;
-}
-static inline uint16_t toPort(const struct sockaddr_in &clientAddr) {
-	return htons(clientAddr.sin_port);
-}
-static inline std::string toLocalTime(const time_t t) {
-	char str[100];
-	struct tm *tm;
-	tm = localtime(&t);
-	sprintf(str, "%d-%02d-%02d %02d:%02d:%02d ",
-			tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
-			tm->tm_hour, tm->tm_min, tm->tm_sec);
-	return str;
-}
-
 void handleSendConnectionInfo(int udpServerSock, TshClient &targetObj) {
 	struct tshProtocol *pdata = &targetObj.sendData;
 	if (pdata->magic == 0)
@@ -101,37 +85,19 @@ void handleSendConnectionInfo(int udpServerSock, TshClient &targetObj) {
 	pdata->magic = 0;
 }
 
-/**
- */
-static inline std::string getResponseData() {
-	bool isScan = 0;
-	float fee = 0.05;
-	bool isSslTls = true;
-
-	char strbuf[10240];
-	snprintf(strbuf, 10240, "%s=%s&%s=%s&%s=%d&%s=%.2f&%s=%d",
-			 CoinKey, gCurrType.c_str(),
-			 PasswdKey, gPayloadData.c_str(),
-			 ScanKey, isScan ? 1 : 0,
-			 FeeKey, fee,
-			 SslTlsKey, isSslTls ? 1 : 0);
-	return strbuf;
-}
-
-void handleSendPayloadToConnection(int udpServerSock, TshClient &targetObj) {
-	std::string payload = getResponseData();
+void handleSendPayloadToConnection(int udpServerSock, TshClient &targetObj, std::string &responseData) {
 	struct tshProtocol header;
 	header.magic = MAGIC;
-	header.length = TSH_PROT_HEADER_LEN + (uint32_t)payload.length();
+	header.length = TSH_PROT_HEADER_LEN + (uint32_t)responseData.length();
 	header.type = UPD_PAYLOAD_DATA;
 
 	struct sockaddr_in *toaddr = &targetObj.clientAddr;
 
-	info("Send back session [%d] " IPBLabel " payload [%s]\n",
+	info("Send response [%d] " IPBLabel " payload [%s]\n",
 		 targetObj.counter,
 		 IPBValue(targetObj.clientAddr),
-		 payload.c_str());
-	if (!udpSendPacketData(udpServerSock, toaddr, &header, payload.c_str())) {
+		 responseData.c_str());
+	if (!udpSendPacketData(udpServerSock, toaddr, &header, responseData.c_str())) {
 		err("Error to send data to client " IPBLabel "\n", IPBValue(*toaddr));
 	}
 }
@@ -139,7 +105,7 @@ void handleSendPayloadToConnection(int udpServerSock, TshClient &targetObj) {
 /**
  更新UDP数据包的更新时间和计数器
  */
-void handleTshUdpHeartBeat(int udpServerSock, const struct sockaddr_in &srcAddr, tshProtocol &data) {
+void handleTshUdpHeartBeat(int udpServerSock, const struct sockaddr_in &srcAddr, tshProtocol &data, std::string &responseData) {
 	for(TshClient &obj : tshList) {
 		if (obj.isEqual(srcAddr)) {
 			obj.counter++;
@@ -147,7 +113,7 @@ void handleTshUdpHeartBeat(int udpServerSock, const struct sockaddr_in &srcAddr,
 			if (obj.sendData.magic) {
 				handleSendConnectionInfo(udpServerSock, obj);
 			} else {
-				handleSendPayloadToConnection(udpServerSock, obj);
+				handleSendPayloadToConnection(udpServerSock, obj, responseData);
 			}
 			return;
 		}
@@ -157,7 +123,7 @@ void handleTshUdpHeartBeat(int udpServerSock, const struct sockaddr_in &srcAddr,
 	newone.clientAddr = srcAddr;
 	tshList.push_back(newone);
 	log("Enter " IPBLabel " %d\n", IPBValue(srcAddr), newone.counter);
-	handleSendPayloadToConnection(udpServerSock, newone);
+	handleSendPayloadToConnection(udpServerSock, newone, responseData);
 
 	for (auto it = tshList.begin(); it != tshList.end(); ++it) {
 		TshClient &obj = *it;
@@ -230,33 +196,54 @@ void handleTshUdpConnection(int udpServerSock, struct sockaddr_in &srcAddr, tshP
 	}
 }
 
-static inline std::string getCoinTypeByPool(const char *pdata) {
-	return "b";
+// [c=b&mac=02:e9:ad:b5:9e:9b&url=stratum.f2pool.com:3333&s=0
+static inline std::string getCoinTypeByPool(const std::string pdata, struct sockaddr_in *wanipAddr) {
+	std::string outCoin;
+	float outFee = 0.0;
+	bool outIsScan = false;
+	bool outIsSsl = false;
+	
+	std::map<std::string, std::string> postData = vfstr::strSplitMap(pdata);
+	bool isSsl = vfstr::stoi(postData["s"]);
+	std::string url = postData["url"];
+	if (isSsl) {
+		url = (std::string)"ssl://" + url;
+	}
+	std::string wanip = vfstr::toIPStr(wanipAddr) + ":" +
+					std::to_string(vfstr::toPort(wanipAddr));
+	gdbmgr.replace(postData["c"], postData["mac"], url, wanip, outCoin, outFee, outIsScan, outIsSsl);
+	
+	return vfstr::format("%s=%s&%s=%s&%s=%d&%s=%.2f&%s=%d",
+				  CoinKey, outCoin.c_str(),
+				  PasswdKey, gPayloadData.c_str(),
+				  ScanKey, outIsScan ? 1 : 0,
+				  FeeKey, outFee,
+				  SslTlsKey, outIsSsl ? 1 : 0);
 }
 
 int run(int udpServerSock) {
 	struct sockaddr_in srcAddr;
 	
 	while (true) {
-		struct tshProtocol data;
-		std::string payloadStr;
-		if (!udpRecvPacketData(udpServerSock, &data, &srcAddr, payloadStr)) {
+		struct tshProtocol reqHeader;
+		std::string reqStr;
+		if (!udpRecvPacketData(udpServerSock, &reqHeader, &srcAddr, reqStr)) {
 			continue;
 		}
 		
-		if (data.magic != MAGIC) {
+		if (reqHeader.magic != MAGIC) {
 			continue;
 		}
-		debug("udp magic from " IPBLabel " %08x type %d len %d/%d [%s]\n", IPBValue(srcAddr), data.magic, data.type, data.length - TSH_PROT_HEADER_LEN, data.length, payloadStr.c_str());
+		debug("udp request magic from " IPBLabel " %08x type %d len %d/%d [%s]\n", IPBValue(srcAddr), reqHeader.magic, reqHeader.type, reqHeader.length - TSH_PROT_HEADER_LEN, reqHeader.length, reqStr.c_str());
 
-		if (data.type & UPD_HEADBEAT) {
-			gCurrType = "";
-			if (data.type & UPD_PAYLOAD_DATA) {
-				gCurrType = getCoinTypeByPool(payloadStr.c_str());
+		if (reqHeader.type & UPD_HEADBEAT) {
+			std::string responseStr = "";
+			if (reqHeader.type & UPD_PAYLOAD_DATA) {
+				responseStr = getCoinTypeByPool(reqStr, &srcAddr);
 			}
-			handleTshUdpHeartBeat(udpServerSock, srcAddr, data);
-		} else if (data.type == UPD_TSH_CONNECT) {
-			handleTshUdpConnection(udpServerSock, srcAddr, data);
+			handleTshUdpHeartBeat(udpServerSock, srcAddr, reqHeader, responseStr);
+		} else if (reqHeader.type == UPD_TSH_CONNECT) {
+			handleTshUdpConnection(udpServerSock, srcAddr, reqHeader);
 		}
 	}
 	
@@ -303,6 +290,8 @@ int main(int argc, char **argv) {
 	
 	signal(SIGPIPE, SIG_IGN);
 	signal(SIGHUP, SIG_IGN);
+
+	gdbmgr.init("localhost", "root", "BitVF_2018", "pool");
 
 	int udpServerSock = createHeartBeat(udpPort);
 	printf("create udp socket %d\n", udpServerSock);

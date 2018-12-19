@@ -200,7 +200,7 @@ static inline bool __udpRecvPacketData(int s, struct tshProtocol *data, struct s
 
 static inline bool udpSendCString(int s, const char *pdata, size_t len, struct sockaddr_in *toAddr) {
 	ssize_t ret = sendto(s, (const void *)pdata, len, 0, (const struct sockaddr *)toAddr, (socklen_t)sizeof(struct sockaddr_in));
-	if (ret != len)
+	if (ret != (ssize_t)len)
 		return false;
 	return true;
 }
