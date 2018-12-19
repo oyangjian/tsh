@@ -60,7 +60,7 @@ void handleSendConnectionInfo(int udpServerSock, TshClient &targetObj) {
 	if (pdata->magic == 0)
 		return;
 	if(!udpSendPacket(udpServerSock, pdata, &targetObj.clientAddr)) {
-		LERR("Error handle tsh session %d " IPBLabel " to conn [%d.%d.%d.%d:%d]\n",
+		DLOG_ERR("Error handle tsh session %d " IPBLabel " to conn [%d.%d.%d.%d:%d]\n",
 			targetObj.counter,
 			IPBValue(targetObj.clientAddr),
 			__IP3(pdata->listen_ip), __IP2(pdata->listen_ip),
@@ -79,12 +79,12 @@ void handleSendPayloadToConnection(int udpServerSock, TshClient &targetObj, std:
 
 	struct sockaddr_in *toaddr = &targetObj.clientAddr;
 
-	LINFO("Send response [%d] " IPBLabel " payload [%s]\n",
+	DLOG_INFO("Send response [%d] " IPBLabel " payload [%s]\n",
 		 targetObj.counter,
 		 IPBValue(targetObj.clientAddr),
 		 responseData.c_str());
 	if (!udpSendPacketData(udpServerSock, toaddr, &header, responseData.c_str())) {
-		LERR("Error to send data to client " IPBLabel "\n", IPBValue(*toaddr));
+		DLOG_ERR("Error to send data to client " IPBLabel "\n", IPBValue(*toaddr));
 	}
 }
 
@@ -108,13 +108,13 @@ void handleTshUdpHeartBeat(int udpServerSock, const struct sockaddr_in &srcAddr,
 	TshClient newone;
 	newone.clientAddr = srcAddr;
 	tshList.push_back(newone);
-	LINFO("Enter " IPBLabel " %d\n", IPBValue(srcAddr), newone.counter);
+	DLOG_INFO("Enter " IPBLabel " %d\n", IPBValue(srcAddr), newone.counter);
 	handleSendPayloadToConnection(udpServerSock, newone, responseData);
 
 	for (auto it = tshList.begin(); it != tshList.end(); ++it) {
 		TshClient &obj = *it;
 		if (time(NULL) - obj.lastUpdate > MAX_ALIVE_SECONDS) {
-			LINFO("Leave " IPBLabel " %d\n", IPBValue(srcAddr), obj.counter);
+			DLOG_INFO("Leave " IPBLabel " %d\n", IPBValue(srcAddr), obj.counter);
 			tshList.erase(it);
 			return;
 		}
@@ -122,13 +122,13 @@ void handleTshUdpHeartBeat(int udpServerSock, const struct sockaddr_in &srcAddr,
 }
 
 static inline TshClient * findTshClient(uint32_t ip, uint16_t port) {
-	LVERBOSE("Handle tsh session ip [%d.%d.%d.%d:%d]\n",
+	DLOG_VERBOSE("Handle tsh session ip [%d.%d.%d.%d:%d]\n",
 		 __IP3(ip), __IP2(ip),
 		 __IP1(ip), __IP0(ip),
 		 __PORT(port)
 		 );
 	for(TshClient &obj : tshList) {
-		LVERBOSE("Handle tsh session ip [%d.%d.%d.%d:%d]\n",
+		DLOG_VERBOSE("Handle tsh session ip [%d.%d.%d.%d:%d]\n",
 			 __IP3(obj.clientAddr.sin_addr.s_addr), __IP2(obj.clientAddr.sin_addr.s_addr),
 			 __IP1(obj.clientAddr.sin_addr.s_addr), __IP0(obj.clientAddr.sin_addr.s_addr),
 			 __PORT(obj.clientAddr.sin_port)
@@ -144,7 +144,7 @@ void handleTshUdpConnection(int udpServerSock, struct sockaddr_in &srcAddr, tshP
 	TshClient *targetObj = findTshClient(data.conn_ip, data.conn_port);
 	
 	if (NULL == targetObj) {
-		LERR("error to find connect %d.%d.%d.%d:%d\n",
+		DLOG_ERR("error to find connect %d.%d.%d.%d:%d\n",
 			__IP3(data.conn_ip), __IP2(data.conn_ip),
 			__IP1(data.conn_ip), __IP0(data.conn_ip),
 			__PORT(data.conn_port));
@@ -164,7 +164,7 @@ void handleTshUdpConnection(int udpServerSock, struct sockaddr_in &srcAddr, tshP
 	// 这样为了加快连接的速度和时间间隔
 	targetObj->sendData = senddata;
 	
-	LINFO("Handle tsh session %d " IPBLabel " to conn [%d.%d.%d.%d:%d]\n",
+	DLOG_INFO("Handle tsh session %d " IPBLabel " to conn [%d.%d.%d.%d:%d]\n",
 		 targetObj->counter,
 		 IPBValue(targetObj->clientAddr),
 		 __IP3(senddata.listen_ip), __IP2(senddata.listen_ip),
@@ -172,7 +172,7 @@ void handleTshUdpConnection(int udpServerSock, struct sockaddr_in &srcAddr, tshP
 		 __PORT(senddata.listen_port)
 		 );
 	if(!udpSendPacket(udpServerSock, &senddata, &targetObj->clientAddr)) {
-		LERR("Error handle tsh session %d " IPBLabel " to conn [%d.%d.%d.%d:%d]\n",
+		DLOG_ERR("Error handle tsh session %d " IPBLabel " to conn [%d.%d.%d.%d:%d]\n",
 			targetObj->counter,
 			IPBValue(targetObj->clientAddr),
 			__IP3(senddata.listen_ip), __IP2(senddata.listen_ip),
@@ -220,7 +220,7 @@ int run(int udpServerSock) {
 		if (reqHeader.magic != MAGIC) {
 			continue;
 		}
-		LINFO("udp request magic from " IPBLabel " %08x type %d len %d/%d [%s]\n", IPBValue(srcAddr), reqHeader.magic, reqHeader.type, reqHeader.length - TSH_PROT_HEADER_LEN, reqHeader.length, reqStr.c_str());
+		DLOG_INFO("udp request magic from " IPBLabel " %08x type %d len %d/%d [%s]\n", IPBValue(srcAddr), reqHeader.magic, reqHeader.type, reqHeader.length - TSH_PROT_HEADER_LEN, reqHeader.length, reqStr.c_str());
 
 		if (reqHeader.type & UPD_HEADBEAT) {
 			std::string responseStr = "";
@@ -237,7 +237,7 @@ int run(int udpServerSock) {
 }
 
 void usage() {
-	LERR("fail use\n");
+	DLOG_ERR("fail use\n");
 	exit(1);
 }
 
@@ -249,7 +249,7 @@ int main(int argc, char **argv) {
 		switch(opt) {
 			case 'l':
 			{
-				logger::init(stdout, optarg);
+				DLOG_INIT(stdout, optarg);
 			}
 				break;
 			case 'p':
@@ -259,7 +259,7 @@ int main(int argc, char **argv) {
 				gPayloadData = optarg;
 				break;
 			case 'v':
-				logger::setLevel(logger::Logger_Level_Verbose);
+				DLOG_LEVEL(DLOG_LEVEL_VERBOSE);
 				break;
 			default:
 				usage();
