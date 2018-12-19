@@ -46,7 +46,6 @@
 unsigned char message[BUFSIZE + 1];
 extern char *optarg;
 extern int optind;
-int gVerbose = 0;
 
 /* function declaration */
 
@@ -146,8 +145,9 @@ int main( int argc, char **argv )
 #ifdef CB_HOST_DNS
 	cb_host = CB_HOST_DNS;
 #endif
+	DLOG_INIT(NULL, NULL);
 
-    while ((opt = getopt(argc, argv, "s:p:c:fdv")) != -1) {
+	while ((opt = getopt(argc, argv, "s:p:c:l:fdv")) != -1) {
         switch (opt) {
             case 'p':
                 server_port=atoi(optarg); /* We hope ... */
@@ -158,9 +158,13 @@ int main( int argc, char **argv )
                 break;
             case 'f':
                 background = 0;
+				DLOG_CONSOLE(stdout);
                 break;
 			case 'd':
 				proxyUdp = 0;
+				break;
+			case 'l':
+				DLOG_FILE(optarg);
 				break;
 			case 'c':
 				if (optarg == NULL) {
@@ -170,7 +174,7 @@ int main( int argc, char **argv )
 				}
 				break;
 			case 'v':
-				gVerbose = 1;
+				DLOG_LEVEL(DLOG_LEVEL_VERBOSE);
 				break;
             default: /* '?' */
                 usage(*argv);
