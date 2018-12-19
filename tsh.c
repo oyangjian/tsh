@@ -72,7 +72,7 @@ void sendUdpSignal(const char *listenHostname, uint16_t listenPort, uint32_t con
 	data.listen_ip = parseHostInetAddr(listenHostname);
 	data.listen_port = htons(listenPort);
 
-	info("udp send " IPBLabel " to cb connect [%d.%d.%d.%d:%d] to listen [%s,%d.%d.%d.%d:%d]\n",
+	LINFO("udp send " IPBLabel " to cb connect [%d.%d.%d.%d:%d] to listen [%s,%d.%d.%d.%d:%d]\n",
 		   IPBValue(udpServerAddr),
 		   __IP3(connIp), __IP2(connIp), __IP1(connIp), __IP0(connIp), __PORT(connPort),
 		   listenHostname,
@@ -98,9 +98,11 @@ static int spliteIpAndPort(const char *str, uint32_t *outIp, uint16_t *outPort) 
 	uint16_t port;
 	int ret;
 	ret = sscanf(str, "%hhu.%hhu.%hhu.%hhu:%hu", &ip3, &ip2, &ip1, &ip0, &port);
-	debug("match %d IP [%d.%d.%d.%d:%d]\n", ret, ip3, ip2, ip1, ip0, port);
-	if (ret != 5)
+	LDEBUG("match %d IP [%d.%d.%d.%d:%d]\n", ret, ip3, ip2, ip1, ip0, port);
+	if (ret != 5) {
+		LERR("match %d IP [%d.%d.%d.%d:%d]\n", ret, ip3, ip2, ip1, ip0, port);
 		return -1;
+	}
 	if (outIp) {
 		*outIp = htonl(((ip3 << 24) & 0xFF000000) |
 					   ((ip2 << 16) & 0x00FF0000) |
@@ -258,7 +260,7 @@ connect:
             return( 8 );
         }
 
-		info("udp send  cb connect [%d.%d.%d.%d:%d] \n",
+		LINFO("udp send cb connect [%d.%d.%d.%d:%d] \n",
 			 __IP3(connIp), __IP2(connIp), __IP1(connIp), __IP0(connIp), __PORT(connPort)
 			 );
 

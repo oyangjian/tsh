@@ -21,9 +21,9 @@ TSHD		= tshd
 UdpProxy = tshUdpProxy
 
 VERSION=tsh-0.7
-CLIENT_OBJ=pel.c aes.c sha1.c  tsh.c
-SERVER_OBJ=pel.c aes.c sha1.c tshd.c
-SERVER_OBJO=pel.o aes.o sha1.o tshd.o
+CLIENT_OBJ=pel.c aes.c sha1.c  tsh.c LoggerUtils.c
+SERVER_OBJ=pel.c aes.c sha1.c tshd.c LoggerUtils.c
+SERVER_OBJO=pel.o aes.o sha1.o tshd.o LoggerUtils.o
 
 DISTFILES= \
     sha1.h \
@@ -145,7 +145,8 @@ $(TSHD): $(COMM) tshd.o
 
 $(UdpProxy): tshUdpProxy.o
 	g++ ${LDFLAGS} -std=c++11 -c `mysql_config --cflags` -o DbMgr.o DbMgr.cpp
-	g++ ${LDFLAGS} -std=c++11 -o $(UdpProxy) tshUdpProxy.o DbMgr.o `mysql_config --libs`
+	g++ ${LDFLAGS} -std=c++11 -c -o LoggerUtils.o LoggerUtils.c
+	g++ ${LDFLAGS} -std=c++11 -o $(UdpProxy) tshUdpProxy.o DbMgr.o LoggerUtils.o `mysql_config --libs`
 
 aes.o: aes.h
 pel.o: aes.h pel.h sha1.h

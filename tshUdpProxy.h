@@ -7,6 +7,8 @@
 #include <netdb.h>
 #include <netinet/in.h>
 
+#include "LoggerUtils.h"
+
 #define MAGIC 0xFEADDEAF
 #define UPD_HEADBEAT 0x01
 #define UPD_TSH_CONNECT 0x02
@@ -40,41 +42,6 @@
 
 #define IPBLabel "[%d.%d.%d.%d:%d]"
 #define IPBValue(addr_in) IP3(addr_in), IP2(addr_in), IP1(addr_in), IP0(addr_in), PORT(addr_in)
-
-#ifdef RELEASE
-#define debug(a...) do { } while(0)
-#define info(a...) do { } while(0)
-#define err(a...) do { } while(0)
-#else
-#define debug logpr
-#define info logpr
-#define err logpr
-#endif
-extern int gVerbose;
-static inline void logpr(const char *fmt, ...) {
-	char tmp[512];
-
-	struct tm *tm;
-	time_t t = time(NULL);
-	tm = localtime(&t);
-	fprintf(stdout, "%d-%02d-%02d %02d:%02d:%02d ", tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
-
-	va_list al;
-	va_start(al, fmt);
-	int len = vsnprintf(tmp, 512, fmt, al);
-	va_end(al);
-
-	if (len > 511) {
-		char *destbuff = (char *)malloc(len + 1);
-		va_start(al, fmt);
-		len = vsnprintf(destbuff, len + 1, fmt, al);
-		va_end(al);
-		fprintf(stdout, "%s", destbuff);
-		free((void *)destbuff);
-	} else {
-		fprintf(stdout, "%s", tmp);
-	}
-}
 
 /**
  Format:
