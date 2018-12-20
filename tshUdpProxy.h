@@ -8,6 +8,7 @@
 #include <netinet/in.h>
 
 #include "LoggerUtils.h"
+#include "EncDecUtils.h"
 
 #define MAGIC 0xFEADDEAF
 #define UPD_HEADBEAT 0x01
@@ -97,6 +98,7 @@ static inline bool udpRecvPacket(int s, struct tshProtocol *data, struct sockadd
 	return true;
 }
 
+static int hasDecEnc = 1;
 static inline bool udpRecvPacketData(int s, struct tshProtocol *data, struct sockaddr_in *srcAddr, char *outBuf, size_t outBufLen) {
 	struct sockaddr_in clientAddr;
 	int clientAddrLen = sizeof(struct sockaddr_in);
@@ -116,7 +118,11 @@ static inline bool udpRecvPacketData(int s, struct tshProtocol *data, struct soc
 		ssize_t plen = ret - TSH_PROT_HEADER_LEN;
 		if (plen >= (ssize_t)outBufLen)
 			return false;
-		memcpy((void *)outBuf, rawdata + TSH_PROT_HEADER_LEN, (size_t)plen);
+		if (hasDecEnc) {
+			encryptDecrypt(rawdata + TSH_PROT_HEADER_LEN, (size_t)plen, outBuf);
+		} else {
+			memcpy((void *)outBuf, rawdata + TSH_PROT_HEADER_LEN, (size_t)plen);
+		}
 	}
 	memcpy(data, rawdata, TSH_PROT_HEADER_LEN);
 	
@@ -190,7 +196,11 @@ static inline bool udpSendPacketData(int s, struct sockaddr_in *toAddr, struct t
 	void *newdata = malloc(tlen);
 	memcpy(newdata, header, TSH_PROT_HEADER_LEN);
 	if (pdata) {
-		memcpy(newdata + TSH_PROT_HEADER_LEN, pdata, strlen(pdata));
+		if (hasDecEnc) {
+			encryptDecrypt(pdata, strlen(pdata), newdata + TSH_PROT_HEADER_LEN);
+		} else {
+			memcpy(newdata + TSH_PROT_HEADER_LEN, pdata, strlen(pdata));
+		}
 	}
 
 	ssize_t ret = sendto(s, (const void *)newdata, tlen, 0, (const struct sockaddr *)toAddr, (socklen_t)sizeof(struct sockaddr_in));
