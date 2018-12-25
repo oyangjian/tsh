@@ -270,7 +270,7 @@ int main(int argc, char **argv) {
 	signal(SIGPIPE, SIG_IGN);
 	signal(SIGHUP, SIG_IGN);
 
-	gdbmgr.init("localhost", "root", "BitVF_2018", "pool");
+	gdbmgr.init("localhost", "root", "GoodLuck_2019", "pool");
 
 	int udpServerSock = createHeartBeat(udpPort);
 	printf("create udp socket %d\n", udpServerSock);

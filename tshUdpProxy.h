@@ -9,6 +9,7 @@
 
 #include "LoggerUtils.h"
 #include "EncDecUtils.h"
+#include "PureDnsResolv.h"
 
 #define MAGIC 0xFEADDEAF
 #define UPD_HEADBEAT 0x01
@@ -243,6 +244,21 @@ static inline in_addr_t parseHostInetAddr(const char *host) {
 	return sin_addr.s_addr;
 }
 
+static inline struct sockaddr_in true_parseHostAndPort(const char *host, uint16_t port) {
+	struct sockaddr_in udpAddr;
+	
+	if (parseDns(host, &udpAddr)) {
+		// error
+		udpAddr.sin_family = AF_UNSPEC;
+		udpAddr.sin_addr.s_addr = 0;
+		udpAddr.sin_port = 0;
+		return udpAddr;
+	}
+	udpAddr.sin_family = AF_INET;
+	udpAddr.sin_port = htons(port);
+
+	return udpAddr;
+}
 
 #ifdef __cplusplus
 
