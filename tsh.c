@@ -241,6 +241,7 @@ connect:
             return( 6 );
         }
 
+	retry:
         client_addr.sin_family      = AF_INET;
         client_addr.sin_port        = htons( server_port );
         client_addr.sin_addr.s_addr = INADDR_ANY;
@@ -250,8 +251,9 @@ connect:
 
         if( ret < 0 )
         {
-            perror( "bind" );
-            return( 7 );
+			DLOG_INFO("bind port %d error and retry next\n", server_port);
+			server_port++;
+			goto retry;
         }
 
         if( listen( client, 5 ) < 0 )

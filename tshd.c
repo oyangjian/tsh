@@ -308,6 +308,7 @@ int main( int argc, char **argv )
 				/* 如果UDP发送过来了反向连接的ip:port */
 				if(!hasWaitConnectSignal(udpServer, &udpAddr, &sServer)) {
 					// 如果没有反向连接数据.
+					sleep( CONNECT_BACK_DELAY );
 					continue;
 				}
 				DLOG_INFO("udp got tcp addr " IPBLabel " and begin to connect\n", IPBValue(sServer));
